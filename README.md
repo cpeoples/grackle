@@ -1,7 +1,7 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/brand-mark.svg">
-    <img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/brand-mark-light.svg" alt="Grackle" width="480">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/brand-mark.svg">
+    <img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/brand-mark-light.svg" alt="Grackle" width="480">
   </picture>
 </div>
 
@@ -36,15 +36,15 @@ self-validated against a built-in positive and negative example.
 ### Built with
 
 <p>
-  <a href="https://www.rust-lang.org/" title="Rust"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/rust.svg" alt="Rust" width="28" height="28" /></a>
+  <a href="https://www.rust-lang.org/" title="Rust"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/rust.svg" alt="Rust" width="28" height="28" /></a>
   &nbsp;&nbsp;
-  <a href="https://doc.rust-lang.org/cargo/" title="Cargo"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/cargo.svg" alt="Cargo" width="28" height="28" /></a>
+  <a href="https://doc.rust-lang.org/cargo/" title="Cargo"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/cargo.svg" alt="Cargo" width="28" height="28" /></a>
   &nbsp;&nbsp;
-  <a href="https://docs.github.com/actions" title="GitHub Actions"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/githubactions.svg" alt="GitHub Actions" width="28" height="28" /></a>
+  <a href="https://docs.github.com/actions" title="GitHub Actions"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/githubactions.svg" alt="GitHub Actions" width="28" height="28" /></a>
   &nbsp;&nbsp;
-  <a href="https://docs.gitlab.com/ee/ci/" title="GitLab CI"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/gitlab.svg" alt="GitLab CI" width="28" height="28" /></a>
+  <a href="https://docs.gitlab.com/ee/ci/" title="GitLab CI"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/gitlab.svg" alt="GitLab CI" width="28" height="28" /></a>
   &nbsp;&nbsp;
-  <a href="https://gohugo.io/" title="Hugo"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.0/docs/assets/hugo.svg" alt="Hugo" width="28" height="28" /></a>
+  <a href="https://gohugo.io/" title="Hugo"><img src="https://raw.githubusercontent.com/cpeoples/grackle/v0.1.1/docs/assets/hugo.svg" alt="Hugo" width="28" height="28" /></a>
 </p>
 
 ## What it flags

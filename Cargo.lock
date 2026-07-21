@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "grackle"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "fancy-regex",
