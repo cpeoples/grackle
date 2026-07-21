@@ -1,0 +1,25 @@
+[package]
+name = "grackle"
+version = "0.1.0"
+edition = "2021"
+description = "Detects fork-triggerable CI coding agents that can write to the repository"
+license = "Apache-2.0"
+repository = "https://github.com/cpeoples/grackle"
+
+[[bin]]
+name = "grackle"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+fancy-regex = "0.14"
+regex = "1.13.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11.0"
+ureq = { version = "3.3.0", default-features = false, features = ["json", "rustls"] }
+walkdir = "2"
+
+[profile.release]
+lto = true
+strip = true

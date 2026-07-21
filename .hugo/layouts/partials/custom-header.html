@@ -1,0 +1,46 @@
+{{- $ogImage := printf "%sassets/og-image.png" site.BaseURL }}
+{{- $siteId := printf "%s#website" site.BaseURL }}
+{{- $assetBusting := partialCached "assetbusting.gotmpl" site.Home }}
+
+<link rel="canonical" href="{{ .Permalink }}" />
+<link rel="icon" href="/images/favicon.svg" type="image/svg+xml" />
+
+{{- $customCSS := "css/custom.css" }}
+{{- with (resources.Get (printf "/%s" $customCSS)) }}
+<link href="{{ .RelPermalink }}{{ $assetBusting }}" rel="stylesheet">
+{{- else }}
+  {{- if (fileExists (printf "/static/%s" $customCSS)) }}
+<link href="{{ $customCSS | relURL }}{{ $assetBusting }}" rel="stylesheet">
+  {{- end }}
+{{- end }}
+
+<meta property="og:image" content="{{ $ogImage }}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Grackle: fork-triggerable CI agent scanner" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="{{ $ogImage }}" />
+<meta name="twitter:image:alt" content="Grackle: fork-triggerable CI agent scanner" />
+
+{{- if .IsHome }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "{{ $siteId }}",
+  "name": "Grackle",
+  "description": "Standalone scanner that detects fork-triggerable AI coding agents with repository write access in GitHub Actions and GitLab CI workflows.",
+  "url": "{{ site.BaseURL }}",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "SecurityApplication",
+  "operatingSystem": "Linux, macOS, Windows",
+  "programmingLanguage": "Rust",
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "codeRepository": "https://github.com/cpeoples/grackle",
+  "image": "{{ $ogImage }}",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Chris Peoples", "url": "https://cpeoples.github.io" }
+}
+</script>
+{{- end }}

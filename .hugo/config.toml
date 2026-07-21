@@ -1,0 +1,66 @@
+baseURL = "/"
+languageCode = "en-us"
+title = "Grackle"
+theme = "hugo-theme-relearn"
+
+uglyURLs = false
+enableGitInfo = true
+
+disableKinds = ["taxonomy", "term"]
+
+[sitemap]
+  changefreq = "weekly"
+  priority = 0.5
+  filename = "sitemap.xml"
+
+[params]
+
+  themeVariant = ["relearn-dark", "relearn-light"]
+  themeVariantAuto = ["relearn-dark", "relearn-light"]
+  themeVariantDefault = "relearn-dark"
+
+  search = true
+  searchMaxResultLength = 20
+
+  disableBreadcrumb = false
+  disableNextPrev = false
+
+  collapsibleMenu = true
+  alwaysopen = false
+
+  externalLinkTarget = "_blank"
+
+  sidebarmenus = [
+    { type = "page", identifier = "main", disableTitle = true, pageRef = "/" },
+    { type = "menu", identifier = "shortcuts", disableTitle = true }
+  ]
+
+  showVisitedLinks = false
+  print = true
+  printPageBreak = true
+
+  [params.author]
+    name = "Chris Peoples"
+
+[[menu.shortcuts]]
+  pre = '<i class="fa-fw fab fa-github"></i> '
+  name = "GitHub Repo"
+  url = "https://github.com/cpeoples/grackle"
+  weight = 10
+
+[markup]
+  [markup.highlight]
+    codeFences = true
+    lineNos = true
+    lineNumbersInTable = true
+    style = "monokai"
+    noClasses = false
+
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+  [markup.goldmark.parser]
+    [markup.goldmark.parser.attribute]
+      block = true
+      title = true

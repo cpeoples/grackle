@@ -1,0 +1,7 @@
+name: grackle
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  - .hugo/**
