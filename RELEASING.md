@@ -14,13 +14,19 @@ release:
 | --- | --- | --- |
 | `CARGO_REGISTRY_TOKEN` | repo Actions secret | `cargo publish` to crates.io. Scope it to `publish-new` + `publish-update`. |
 | `HOMEBREW_TAP_TOKEN` | repo Actions secret | A PAT with `contents` and `pull-requests` write on `cpeoples/homebrew-tap`, used to open and auto-merge the formula bump. |
+| `SNAPCRAFT_STORE_CREDENTIALS` | repo Actions secret | Snap Store login exported with `snapcraft export-login`, scoped to the `grackle` snap name. Used to publish to the stable channel. |
 | `homebrew-tap` | repo environment | Referenced by the tap-bump job; must exist even if it has no protection rules. |
+| `snapcraft` | repo environment | Referenced by the Snap Store publish job; must exist even if it has no protection rules. |
 
 `GITHUB_TOKEN` is injected automatically and needs no setup.
 
 The tap repository must already contain `Formula/grackle.rb`. The bump job
 rewrites the version and checksums in an existing formula; it does not create
 one.
+
+The `grackle` snap name must be registered on snapcraft.io before the first
+publish (`snapcraft register grackle`). Generate the credential with
+`snapcraft export-login` and store its contents as `SNAPCRAFT_STORE_CREDENTIALS`.
 
 ## Cutting a release
 
@@ -52,6 +58,8 @@ On a published release, the jobs run in this order:
 - **publish-crate** - `cargo publish --locked` to crates.io.
 - **bump-tap** - opens a pull request on `cpeoples/homebrew-tap` with the new
   version and checksums and enables auto-merge.
+- **publish-snap** - builds the snap from `snap/snapcraft.yaml` and pushes it to
+  the Snap Store stable channel.
 
 `workflow_dispatch` runs only the build job, so you can smoke-test the build on
 any branch without publishing anything.

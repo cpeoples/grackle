@@ -1,0 +1,53 @@
+name: grackle
+base: core24
+adopt-info: grackle
+title: grackle
+summary: "Scanner for fork-triggerable CI coding agents with repo write access"
+description: |
+  grackle is a static scanner that detects fork-triggerable AI coding agents
+  with repository write access in GitHub Actions and GitLab CI workflows.
+
+  When an AI coding agent runs on untrusted fork input in a job that can write
+  to the repository and nothing checks who triggered it, prompt injection
+  becomes remote code execution and repository takeover under the CI token.
+  grackle finds that exact composition statically, before it merges. It proves
+  fork reachability, author and merge gates, and write capability, and reports
+  only the compositions that are actually exploitable.
+
+  Findings carry a severity, a confidence, the offending workflow block, a
+  dynamic secure-fix write-up, and control-framework references (CWE, OWASP,
+  MITRE ATT&CK and ATLAS, NIST, CIS). Outputs SARIF, GitLab SAST, CycloneDX
+  SBOM, JUnit, JSON, HTML, Markdown, YAML, CSV, and XML.
+
+  Releases are Sigstore-signed with SLSA Build Level 3 provenance.
+icon: snap/gui/icon.svg
+license: Apache-2.0
+source-code: https://github.com/cpeoples/grackle
+issues: https://github.com/cpeoples/grackle/issues
+contact: https://github.com/cpeoples/grackle/issues
+donation: https://github.com/sponsors/cpeoples
+website: https://cpeoples.github.io/grackle/
+grade: stable
+
+# Strict confinement sandboxes file access to the plugged interfaces: home
+# (auto-connected) for content under the user's home directory, removable-media
+# (connect manually) for mounted drives. System paths like /etc and /opt are
+# out of scope by design.
+confinement: strict
+
+apps:
+  grackle:
+    command: bin/grackle
+    plugs:
+      - home
+      - removable-media
+
+parts:
+  grackle:
+    plugin: rust
+    source: .
+    # The workflow stamps the tag into snap/.version; core24 has no git in the
+    # build environment for craftctl to resolve it on its own.
+    override-build: |
+      craftctl set version="$(cat "${CRAFT_PROJECT_DIR}/snap/.version")"
+      craftctl default
