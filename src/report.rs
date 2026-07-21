@@ -504,8 +504,9 @@ fn junit(results: &[FileResult], total: usize) -> String {
 }
 
 fn csv(results: &[FileResult]) -> String {
-    let mut out =
-        String::from("file,line,severity,confidence,rule_id,title,cwe,owasp,mitre_attack,recommendation\n");
+    let mut out = String::from(
+        "file,line,severity,confidence,rule_id,title,cwe,owasp,mitre_attack,recommendation\n",
+    );
     for (path, f) in flat(results) {
         let m = &f.metadata;
         out.push_str(&format!(
@@ -753,7 +754,11 @@ mod tests {
 
     #[test]
     fn csv_and_text_show_confidence() {
-        assert!(csv(&results()).lines().next().unwrap().contains("confidence"));
+        assert!(csv(&results())
+            .lines()
+            .next()
+            .unwrap()
+            .contains("confidence"));
         assert!(text(&results(), 1).contains("(high confidence)"));
     }
 }

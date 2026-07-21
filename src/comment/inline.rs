@@ -55,8 +55,9 @@ fn resolved_inline_body(original: &str, commit_sha: &str) -> String {
 
     if let Some(idx) = blocks.iter().position(|b| header_rule_id(b).is_some()) {
         let rule = header_rule_id(&blocks[idx]).unwrap_or_else(|| "this rule".to_string());
-        blocks[idx] =
-            format!("\u{2705} **RESOLVED** \u{00b7} `{rule}` \u{00b7} no longer found in `{short}`");
+        blocks[idx] = format!(
+            "\u{2705} **RESOLVED** \u{00b7} `{rule}` \u{00b7} no longer found in `{short}`"
+        );
     }
 
     if !original.contains(INLINE_RESOLVED_SENTINEL) {
@@ -269,14 +270,21 @@ fn github_grackle_threads(
                 continue;
             };
             out.push(GithubThread {
-                node_id: node.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
+                node_id: node
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
                 comment_id: node
                     .pointer("/comments/nodes/0/id")
                     .and_then(Value::as_str)
                     .unwrap_or("")
                     .to_string(),
                 body: body.to_string(),
-                resolved: node.get("isResolved").and_then(Value::as_bool).unwrap_or(false),
+                resolved: node
+                    .get("isResolved")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
                 fingerprint,
             });
         }
