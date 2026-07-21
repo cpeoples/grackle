@@ -12,6 +12,10 @@
 .hugo/resources/
 .hugo/.hugo_build.lock
 
+# Python bytecode cache from the docs build script
+__pycache__/
+*.pyc
+
 # Local-only corpus-hunting scripts + the repo trees they fetch. These query
 # GitHub/GitLab for live fork-triggerable agent workflows to validate grackle
 # against real repos. Kept out of the repo: they fetch third-party code and
