@@ -324,13 +324,11 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
-          version="${VERSION#v}"
           mkdir -p checksums
           gh release download "$VERSION" --repo cpeoples/grackle \
             --pattern "*.tar.gz.sha256" --dir checksums
           python3 - <<'PY'
           import os, re, pathlib
-          version = os.environ["VERSION"].lstrip("v")
           tag = os.environ["VERSION"]
           targets = [
               "aarch64-apple-darwin",
@@ -344,7 +342,6 @@ jobs:
               sha[t] = p.read_text().split()[0]
           path = pathlib.Path(os.environ["FORMULA_PATH"])
           src = path.read_text()
-          src = re.sub(r'^(\s*version\s+)"[^"]+"', rf'\g<1>"{version}"', src, count=1, flags=re.M)
           for t in targets:
               src = re.sub(
                   rf'(grackle-v[^"/]+-{re.escape(t)}\.tar\.gz"\n\s*sha256\s+)"[0-9a-f]{{64}}"',
