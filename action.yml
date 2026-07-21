@@ -1,4 +1,4 @@
-name: grackle
+name: Grackle CI Agent Scanner
 description: Scan CI workflows for fork-triggerable AI coding agents that can write to the repository.
 author: cpeoples
 branding:
