@@ -55,7 +55,7 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-14
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-14
           - target: x86_64-pc-windows-msvc
             runner: windows-2022
 
@@ -82,9 +82,16 @@ jobs:
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/grackle"
           [ "${{ runner.os }}" = "Windows" ] && bin="${bin}.exe"
-          # A cross-compiled aarch64 Linux binary cannot run on the amd64 host;
-          # the arm64 runner is native, so only skip when host and target differ.
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ] && [ "$(uname -m)" != "aarch64" ]; then
+          # A cross-compiled binary whose arch differs from the runner host cannot
+          # execute here: aarch64 Linux on the amd64 runner, and x86_64 macOS on the
+          # arm64 macos-14 runner. Skip the run in those cases; build success is the
+          # gate, and the matching native target still exercises --self-test.
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu) host_arch=x86_64 ;;
+            x86_64-apple-darwin) host_arch=arm64 ;;
+            *) host_arch="" ;;
+          esac
+          if [ -n "$host_arch" ] && [ "$(uname -m)" = "$host_arch" ]; then
             echo "skipping run of cross-built $bin on $(uname -m)"
           else
             "$bin" --self-test
