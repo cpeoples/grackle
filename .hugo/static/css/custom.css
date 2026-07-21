@@ -1,0 +1,263 @@
+:root,
+:root[data-r-theme-variant="relearn-dark"],
+:root[data-r-theme-variant="relearn-light"] {
+  --PRIMARY-color: #a78bfa !important;
+  --PRIMARY-HOVER-color: #8b5cf6 !important;
+  --SECONDARY-color: #a78bfa !important;
+  --SECONDARY-HOVER-color: #8b5cf6 !important;
+  --ACCENT-color: #a78bfa !important;
+  --ACCENT-HOVER-color: #8b5cf6 !important;
+  --CODE-INLINE-color: #a78bfa !important;
+}
+
+.logo-title,
+.logo-title a {
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+.R-sidebarmenu,
+.R-sidebarmenu a,
+.R-sidebarmenu li {
+  color: #ffffff !important;
+}
+
+.R-sidebarmenu li.active > a {
+  color: #a78bfa !important;
+}
+
+.R-shortcutmenu-homelinks li.active > a,
+.R-shortcutmenu li.active > a {
+  color: #ffffff !important;
+  background: transparent !important;
+  text-decoration: underline !important;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 3px !important;
+}
+
+.R-shortcutmenu-homelinks a:hover,
+.R-shortcutmenu a:hover {
+  color: #ffffff !important;
+  background: transparent !important;
+  text-decoration: underline !important;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 3px !important;
+}
+
+#R-sidebar .collapsible-menu label i.fa-chevron-right,
+#R-sidebar .collapsible-menu label i.fa-chevron-down {
+  color: #ffffff !important;
+}
+
+#R-sidebar .collapsible-menu label {
+  margin-right: 8px !important;
+}
+
+#R-sidebar input[type="checkbox"]:checked + label i.fa-chevron-right,
+#R-sidebar input[type="checkbox"]:checked + label i.fa-chevron-down {
+  color: #a78bfa !important;
+}
+
+#R-sidebar .collapsible-menu label:hover i {
+  color: #a78bfa !important;
+}
+
+.severity-critical { color: #ef4444; font-weight: bold; }
+.severity-high { color: #f97316; font-weight: bold; }
+.severity-medium { color: #eab308; font-weight: bold; }
+.severity-low { color: #22c55e; }
+
+.pattern-count {
+  display: inline-block;
+  background: #8b5cf6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+
+/* Compliance-framework chips: deep-link to CWE / MITRE / OWASP / NIST / CIS.
+   Each rule carries its full control profile, laid out as one labeled row per
+   framework category so the groups read as distinct lines. */
+.framework-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.framework-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.framework-label {
+  flex: 0 0 6.5rem;
+  text-align: right;
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--MAIN-TEXT-color, #9ca3af);
+  opacity: 0.7;
+  padding-top: 1px;
+}
+
+.framework-chip-group {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 4px 5px;
+  min-width: 0;
+}
+
+.framework-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.75em;
+  font-family: var(--CODE-font, monospace);
+  text-decoration: none !important;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.framework-chip:hover {
+  text-decoration: none !important;
+  filter: brightness(1.1);
+}
+
+.framework-chip-cve {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.framework-chip-cwe {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6 !important;
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.framework-chip-mitre {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7 !important;
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.framework-chip-owasp {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b !important;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.framework-chip-asvs {
+  background: rgba(20, 184, 166, 0.12);
+  color: #14b8a6 !important;
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+.framework-chip-nist {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e !important;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.framework-chip-cis {
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1 !important;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.framework-chip-more {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 0.7em;
+  color: var(--MAIN-TEXT-color, #6b7280);
+  font-style: italic;
+}
+
+.framework-chip-empty {
+  color: var(--MAIN-TEXT-color, #6b7280);
+  opacity: 0.4;
+  font-size: 0.85em;
+}
+
+/* Rule-table column widths. Table is: Agent | Severity | Rule ID | Frameworks.
+   Keep Agent/Severity/Rule ID compact so the wrapping Frameworks cluster gets
+   the remaining width. */
+.pattern-table table th:nth-child(1),
+.pattern-table table td:nth-child(1) {
+  white-space: nowrap;
+  width: 12rem;
+}
+.pattern-table table th:nth-child(2),
+.pattern-table table td:nth-child(2) {
+  width: 6rem;
+  white-space: nowrap;
+}
+.pattern-table table th:nth-child(3),
+.pattern-table table td:nth-child(3) {
+  white-space: nowrap;
+}
+.pattern-table table th:nth-child(4),
+.pattern-table table td:nth-child(4) {
+  width: auto;
+  min-width: 26rem;
+  vertical-align: top;
+}
+
+table td code,
+table th code {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+#R-body-inner > .flex-block-wrapper article h1 {
+  justify-content: center;
+  text-align: center;
+  text-transform: none;
+  overflow-x: visible;
+  font-size: 2.25rem;
+}
+
+/* Homepage brand-mark hero: the landing page leads with the wordmark art, so
+   the theme's front-matter H1 is redundant there. Show the dark art in the
+   dark variant, the light art in the light variant, and drop the page H1. */
+.brand-hero {
+  margin: 0.5rem 0 1.5rem;
+}
+.brand-hero img {
+  max-width: 100%;
+  height: auto;
+}
+.brand-hero-light {
+  display: none !important;
+}
+:root[data-r-theme-variant="relearn-light"] .brand-hero-dark {
+  display: none !important;
+}
+:root[data-r-theme-variant="relearn-light"] .brand-hero-light {
+  display: inline-block !important;
+}
+#R-body-inner > .flex-block-wrapper article:has(.brand-hero) > h1:first-of-type {
+  display: none;
+}
+
+#R-body-inner > .flex-block-wrapper article h1 .heading-icon img {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Drop the theme's right-side gutter on the main content area so wide
+   pattern tables can breathe. Theme default is `0 3.25rem 4rem 3.25rem`. */
+#R-body-inner {
+  padding: 0 0 0rem 0rem;
+}
+
+#R-body .flex-block-wrapper {
+  max-width: calc(var(--INTERNAL-MAIN-MAX-width) - var(--INTERNAL-MENU-L-width) + 30rem) !important;
+  width: 95% !important;
+}

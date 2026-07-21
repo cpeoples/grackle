@@ -1,0 +1,45 @@
+# pre-commit install && pre-commit run --all-files
+# Rust formatting/lint config: rustfmt defaults and Cargo.toml.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+        exclude: ^\.hugo/themes/
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yaml, --strict]
+        files: ^(\.github/|\.pre-commit-config\.yaml$|\.yamllint\.yaml$)
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        language: system
+        entry: cargo fmt --
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        language: system
+        entry: cargo clippy --all-targets --locked -- -D warnings
+        types: [rust]
+        pass_filenames: false
+
+      - id: readme-rule-counts
+        name: Regenerate README/landing rule counts
+        language: system
+        entry: python3 .hugo/scripts/regen_readme_counts.py
+        files: ^(README\.md|docs/index\.md|src/rules/.*\.rs)$
+        pass_filenames: false

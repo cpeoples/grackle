@@ -1,0 +1,148 @@
+name: grackle
+description: Scan CI workflows for fork-triggerable AI coding agents that can write to the repository.
+author: cpeoples
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  path:
+    description: File or directory to scan.
+    required: false
+    default: .
+  version:
+    description: >-
+      grackle release tag to run (e.g. v0.1.0). Defaults to the tag this action
+      was called at, falling back to latest.
+    required: false
+    default: ""
+  format:
+    description: >-
+      Output format when not uploading SARIF: text, json, markdown, sarif,
+      gitlab-sast, junit, csv, xml, yaml, html, cyclonedx.
+    required: false
+    default: sarif
+  output:
+    description: Path to write the report to. Defaults to grackle-results.<ext>.
+    required: false
+    default: ""
+  upload-sarif:
+    description: >-
+      Upload the SARIF report to GitHub code scanning so findings appear inline
+      on pull requests. Requires security-events: write.
+    required: false
+    default: "true"
+  fail-on-findings:
+    description: Fail the step when grackle reports at least one finding.
+    required: false
+    default: "true"
+  token:
+    description: Token used to look up the release when version is unset.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: grackle's exit code (0 clean, 1 findings, 2 error).
+    value: ${{ steps.scan.outputs.exit-code }}
+  report:
+    description: Path to the written report.
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install grackle
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+
+        case "$(uname -s)" in
+          Linux)  os=unknown-linux-gnu ;;
+          Darwin) os=apple-darwin ;;
+          *) echo "::error::grackle action supports Linux and macOS runners only"; exit 1 ;;
+        esac
+        case "$(uname -m)" in
+          x86_64|amd64) arch=x86_64 ;;
+          arm64|aarch64) arch=aarch64 ;;
+          *) echo "::error::unsupported architecture $(uname -m)"; exit 1 ;;
+        esac
+        target="${arch}-${os}"
+
+        version="${INPUT_VERSION:-$ACTION_REF}"
+        case "$version" in
+          v[0-9]*) : ;;
+          *) version=$(gh release view --repo cpeoples/grackle --json tagName -q .tagName) ;;
+        esac
+
+        name="grackle-${version}-${target}"
+        dir="${RUNNER_TEMP}/grackle"
+        mkdir -p "$dir"
+        gh release download "$version" --repo cpeoples/grackle \
+          --pattern "${name}.tar.gz" --pattern "${name}.tar.gz.sha256" --dir "$dir"
+
+        if command -v sha256sum >/dev/null; then
+          sha_cmd="sha256sum"
+        else
+          sha_cmd="shasum -a 256"
+        fi
+        expected=$(cat "${dir}/${name}.tar.gz.sha256")
+        actual=$($sha_cmd "${dir}/${name}.tar.gz" | awk '{print $1}')
+        if [ "$expected" != "$actual" ]; then
+          echo "::error::checksum mismatch for ${name}.tar.gz"; exit 1
+        fi
+        tar -xzf "${dir}/${name}.tar.gz" -C "$dir"
+        echo "${dir}/${name}" >> "$GITHUB_PATH"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+      run: |
+        set -uo pipefail
+
+        format="$INPUT_FORMAT"
+        [ "$UPLOAD_SARIF" = "true" ] && format=sarif
+
+        report="$INPUT_OUTPUT"
+        if [ -z "$report" ]; then
+          case "$format" in
+            sarif) ext=sarif ;;
+            gitlab-sast) ext=json ;;
+            cyclonedx) ext=cdx.json ;;
+            markdown) ext=md ;;
+            *) ext="$format" ;;
+          esac
+          report="grackle-results.${ext}"
+        fi
+
+        grackle "$INPUT_PATH" --format "$format" --output "$report"
+        code=$?
+
+        echo "exit-code=${code}" >> "$GITHUB_OUTPUT"
+        echo "report=${report}" >> "$GITHUB_OUTPUT"
+
+        if [ "$code" -eq 2 ]; then
+          exit 2
+        fi
+        if [ "$FAIL_ON_FINDINGS" = "true" ] && [ "$code" -eq 1 ]; then
+          echo "::error::grackle reported findings; see ${report}"
+          exit 1
+        fi
+        exit 0
+
+    - name: Upload SARIF to code scanning
+      if: always() && inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      with:
+        sarif_file: ${{ steps.scan.outputs.report }}
+        category: grackle
