@@ -36,6 +36,12 @@ WHITEPAPER = REPO_ROOT / "WHITEPAPER.md"
 
 BUILD_TIMESTAMP = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+# GitHub Pages serves the site under a project subpath (/grackle/), passed in
+# as HUGO_BASEURL. Asset URLs written into raw HTML bypass Hugo's relURL
+# rewriting, so they must carry the base prefix themselves.
+BASE_URL = os.environ.get("HUGO_BASEURL", "/").strip()
+ASSET_URL_PREFIX = (BASE_URL.rstrip("/") or "") + "/assets/"
+
 # Human display names for families the rule id cannot spell nicely on its own.
 AGENT_DISPLAY = {
     "cursor": "Cursor",
@@ -368,13 +374,15 @@ def build_landing(rules: list[dict]) -> None:
     )
     hero = (
         '<p class="brand-hero" align="center">'
-        '<img class="brand-hero-dark" src="/assets/brand-mark.svg" alt="Grackle" width="480" />'
-        '<img class="brand-hero-light" src="/assets/brand-mark-light.svg" alt="Grackle" width="480" />'
+        f'<img class="brand-hero-dark" src="{ASSET_URL_PREFIX}brand-mark.svg" alt="Grackle" width="480" />'
+        f'<img class="brand-hero-light" src="{ASSET_URL_PREFIX}brand-mark-light.svg" alt="Grackle" width="480" />'
         "</p>\n\n"
     )
     body = body.replace("<!--RULES-->", "").replace("<!--/RULES-->", "")
     body = body.replace("<!--FAMILIES-->", "").replace("<!--/FAMILIES-->", "")
-    body = body.replace('"docs/assets/', '"/assets/').replace("(docs/assets/", "(/assets/")
+    body = body.replace('"docs/assets/', f'"{ASSET_URL_PREFIX}').replace(
+        "(docs/assets/", f"({ASSET_URL_PREFIX}"
+    )
     write(CONTENT_DIR / "_index.md", front + hero + body)
 
 
