@@ -12,8 +12,8 @@ execution and repository takeover under the CI token.
 We built a scanner for this exact primitive and ran it against a large,
 opportunistically collected corpus of real-world CI workflows. Across **73,937
 workflow files from 16,864 projects**, on both GitHub Actions and GitLab CI, we
-found **589 fork-triggerable agent vulnerabilities spanning 534 distinct
-projects**, across every major agent family in use today. On a **blind subset
+found **589 fork-triggerable agent vulnerabilities in 534 of those projects**,
+across every major agent family in use today. On a **blind subset
 of 3,391 previously unseen files**, its precision was **~98%**, rising to
 effectively 100% after several false-positive classes were closed.
 
@@ -55,6 +55,19 @@ on that text and hold a write-scoped token, a crafted prompt can exfiltrate
 secrets, push commits, open or merge pull requests, or execute arbitrary shell
 commands on the runner. The trust boundary that normally protects a base
 repository from fork contributors is erased.
+
+### How the attack works, concretely
+
+An outside contributor opens a pull request. The visible change looks routine,
+but its description carries hidden instructions written for the agent, not the
+reviewer. A CI job fires automatically on that pull request and passes the
+description to an AI coding agent. The job holds a token that can write to the
+repository, and the agent is allowed to run shell commands, so it treats the
+attacker's text as a task and carries it out under the repository's own identity:
+it reads a secret and posts it back as a comment, or edits a build script and
+pushes the commit. No maintainer approved the run, and nothing checked that the
+person who opened the pull request had any write access. The attacker never
+needed credentials of their own; they borrowed the repository's.
 
 The impact escalates along a predictable ladder. Prompt injection first yields
 arbitrary command execution on the runner. From there the agent's environment
