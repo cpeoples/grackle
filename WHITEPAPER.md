@@ -138,7 +138,7 @@ Cogni AI, Letta Code, potproject/code-agent (a Claude Code/Codex wrapper), the
 cognitivecomputations AI-refactor action, the a5c agent router, the iFlow
 CLI action, Sweep, and PR-Agent), 1 name-independent shell-exec rule (any of the
 common CLIs handed an arbitrary shell on fork content in a secret-bearing job
-without provable repository write - a secret-exfiltration risk scored HIGH), and
+without provable repository write, a secret-exfiltration risk scored HIGH), and
 1 GitLab-native rule.
 
 An agent is sometimes hidden one level below the workflow: the workflow step is
@@ -151,9 +151,9 @@ resolution is deliberate: when the agent CLI lives in the composite body but its
 auto-approve flag (`--dangerously-skip-permissions`, `--yolo`) is supplied by
 the caller's `with:` inputs rather than written literally in the action, the
 tool declines to fire, because it cannot prove the agent runs unattended from
-the action definition alone. A corpus sweep for this exact shape - a
+the action definition alone. A corpus sweep for this exact shape (a
 fork-reachable, ungated caller passing an auto-approve flag into an
-agent-invoking composite - found **zero** real instances across all 73,937
+agent-invoking composite) found **zero** real instances across all 73,937
 files, so we treat it as a documented edge rather than a machinery-justifying
 gap.
 
@@ -163,9 +163,9 @@ A subtle but real fork-reachable path is the `workflow_run` pattern. A first
 workflow runs on a fork's pull request in the *unprivileged* fork context; when
 it completes, a second workflow triggered by `on: workflow_run` runs in the
 **base repository** with the base repo's write token and secrets. If that second
-workflow then ingests data from the triggering run - the fork's uploaded
+workflow then ingests data from the triggering run, such as the fork's uploaded
 artifact (`actions/download-artifact` with `run-id: workflow_run.id`), its
-`head_sha` (checked out and operated on), or its linked `pull_requests` - and
+`head_sha` (checked out and operated on), or its linked `pull_requests`, and
 feeds it to a write-capable agent, an outside contributor drives a privileged
 agent exactly as in the direct-trigger case. `workflow_run` is deliberately kept
 out of the blanket fork-reachable trigger list because most uses are benign
@@ -176,7 +176,7 @@ is **not** guarded to same-repo sources (`workflow_run.head_repository.full_name
 restricted to non-fork producer events (`workflow_run.event == 'push' |
 'schedule' | 'release'`). Write capability and the agent anchor are judged
 separately, so a `contents: read` reviewer chained off `workflow_run` never
-fires. This pattern accounts for a distinct slice of the findings - most visibly
+fires. This pattern accounts for a distinct slice of the findings, most visibly
 the "auto-fix on CI failure" family (`fix-ci.yml`, `claude-autofix.yml`,
 `cursor_fix_ci_failures.yml`), where a fork PR's failing test run silently
 escalates into a write-capable agent editing the checked-out fork branch.
@@ -304,10 +304,10 @@ patterns. GitLab still contributes a non-trivial tail.
 ask-bonk (Bonk) has a dedicated rule but produced **zero findings**: every
 Bonk deployment in the corpus sets `permissions: CODEOWNERS`/`write` or
 `token_permissions: NO_PUSH`, so its rule stays armed for the misconfiguration
-while the ecosystem uses it safely - a precision-first outcome worth stating
+while the ecosystem uses it safely, a precision-first outcome worth stating
 explicitly. JetBrains **Junie**, by contrast, moved from zero to three findings
 once the discovery net widened: Junie self-gates on write access by default, but
-three deployments - including one in **the vendor's own example workflow** -
+three deployments, including one in **the vendor's own example workflow**,
 bypass that default by supplying a custom `prompt:` on a fork-reachable trigger,
 exactly the documented gate-bypass its rule is written to catch (see §5).
 
@@ -321,8 +321,8 @@ reachable deployment is exploitable out of the box. Raw
 once the anchor was made tolerant of shell line-continuations (agents are
 frequently invoked as a multi-line command with the bypass flag on a
 `\`-continued line), a purely mechanical detection improvement that surfaced a
-cluster of previously-invisible true positives. The newest family - **agent
-shell-exec with secret exfiltration** - captures a distinct risk shape: a
+cluster of previously-invisible true positives. The newest family, **agent
+shell-exec with secret exfiltration**, captures a distinct risk shape: a
 fork-reachable, secret-bearing job hands an agent an arbitrary shell on the
 fork's checked-out code without any provable repository write, so the exposure
 is credential theft rather than a repo push (scored HIGH, one tier below the
@@ -352,12 +352,12 @@ above 100 stars or the owner-class proportions.
 The bulk of findings sit in small and early-stage projects, which is expected:
 those repos adopt agent-in-CI wiring fastest and harden it least. But the
 vulnerability is **not confined to hobby projects**. **41 affected projects
-have 100+ stars, 20 have 1,000+, and five exceed 10,000** - the most-starred
-exceeding **185,000 stars**, with others in the 28,000, 20,000, 12,000, and
+have 100+ stars, 20 have 1,000+, and five exceed 10,000**, with the most-starred
+exceeding **185,000 stars**, and others in the 28,000, 20,000, 12,000, and
 10,000 star ranges. Popular, actively-used repositories are exposed too.
 (Specific project identities are withheld pending coordinated disclosure.)
 
-**The adoption ceiling far exceeds the vulnerability ceiling - but the top of
+**The adoption ceiling far exceeds the vulnerability ceiling, but the top of
 the curve is not immune.** Agent-in-CI wiring itself reaches the very top of the
 popularity curve: among the repositories we searched, projects as large as
 `microsoft/vscode` (187k★), `google-gemini/gemini-cli` (106k★), `keras-team/
@@ -368,10 +368,10 @@ repositories on GitHub *regardless of whether they mention an agent* and fetched
 **every workflow file** of each: **6,330 repositories at 8,000+ stars, of which
 5,331 exceed 10,000 stars, 2,176 exceed 20,000, 461 exceed 50,000, and 117
 exceed 100,000** (topping out at 527,970★). The overwhelming majority of that
-mega-star tail is clean - where these repositories run an agent at all, they
+mega-star tail is clean: where these repositories run an agent at all, they
 gate it behind an author-association or non-fork check, run it read-only, or
-restrict it to trusted events. But "overwhelming majority" is not "all": the
-agent-targeted hunt surfaced a finding in a **185k-star flagship project** - a
+restrict it to trusted events. But "overwhelming majority" is not "all". The
+agent-targeted hunt surfaced a finding in a **185k-star flagship project**, a
 `workflow_run`-triggered "auto fix CI failures" workflow that checks out the
 failed PR's `head_branch` under `contents: write` and runs `claude-code-action`
 with `Edit`/`Write`/`Bash(git:*)`/`Bash(gh:*)` tools, then pushes a fix branch.
@@ -387,8 +387,8 @@ coordinated-disclosure dossier, not here.)
 
 Stars measure attention; they do not measure who is on the hook when a repo is
 compromised. Classifying each affected project by the GitHub account that owns
-it - an organization versus an individual, and for organizations a rough proxy
-for reach (public follower count) - reframes the blast radius around
+it (an organization versus an individual, and for organizations a rough proxy
+for reach via public follower count) reframes the blast radius around
 responsibility rather than popularity.
 
 | Owner class | Affected projects |
@@ -400,8 +400,7 @@ responsibility rather than popularity.
 
 **150 of 523 affected projects (29%) are owned by an organization, not an
 individual**, and several are funded companies or established
-institutions with thousands of followers rather than hobby orgs. Most strikingly,
-the widened discovery sweep surfaced two **major agent vendors' own repositories**
+institutions with thousands of followers rather than hobby orgs. The widened discovery sweep surfaced two **major agent vendors' own repositories**
 in the top follower tier (13,000+ and 3,900+ followers respectively): one ships a
 `workflow_run`-triggered "fix failed checks" example that checks out a fork PR's
 branch under `contents: write` with no author gate, and the other publishes a
@@ -440,13 +439,13 @@ capability check, for example, was hardened to ignore YAML and shell comments
 after a workflow whose only "write" token was the string `git push` *inside a
 security-note comment* (`# a stray git push here would use base creds`) was
 briefly mis-flagged. That single fix removed the corpus's highest-starred
-"finding," which was in fact a correctly-hardened, read-only review bot -
+"finding," which was in fact a correctly-hardened, read-only review bot,
 a reminder that at the very top of the popularity curve the safe cases must be
 read as carefully as the dangerous ones. A second class was closed as the
 corpus widened to include GitHub-Next's *Agentic Workflows* (`gh-aw`) framework,
 which compiles an agent spec into a `.lock.yml` whose agent job is gated
-transitively - through a `pre_activation` team-membership job two `needs` hops
-away from the invocation - rather than by an inline `author_association` check.
+transitively (through a `pre_activation` team-membership job two `needs` hops
+away from the invocation) rather than by an inline `author_association` check.
 The gate is real but invisible to a per-job scan, so grackle now recognizes the
 compiled-file signature together with its membership-check wiring and treats the
 whole family as gated. This matters at scale: the corpus contains **1,606**
@@ -454,8 +453,8 @@ whole family as gated. This matters at scale: the corpus contains **1,606**
 safe.
 
 A third class was closed around reusable workflows. A `workflow_call`-only file
-is not itself fork-reachable - its reachability is decided by whichever caller
-`uses:` it - so a reusable definition whose agent consumes only in-repo prompt
+is not itself fork-reachable, since its reachability is decided by whichever caller
+`uses:` it, so a reusable definition whose agent consumes only in-repo prompt
 files (no `github.event.*` untrusted field, no issue/PR/comment identifier
 input) cannot be judged exploitable in isolation and is suppressed; a reusable
 workflow that *does* take an untrusted body/title or an issue/PR number it will
@@ -467,12 +466,12 @@ pre-suppression snapshot even though the corpus roughly tripled in size.
 
 Precision work also has an offensive complement: to guard against *missing*
 agents rather than mis-flagging safe ones, the corpus was swept
-**agent-agnostically** - searching for the vulnerability *shape* (a fork-
+**agent-agnostically**, searching for the vulnerability *shape* (a fork-
 reachable trigger installing or invoking an arbitrary tool that ingests
 untrusted input in a write-capable job) and extracting every tool name that was
 not already one of the covered families. That pass surfaced three genuine
-net-new agent actions - JetBrains **Junie**, **ask-bonk** (an OpenCode wrapper
-used by, among others, Cloudflare), and **Cogni AI** - which were added as
+net-new agent actions, JetBrains **Junie**, **ask-bonk** (an OpenCode wrapper
+used by, among others, Cloudflare), and **Cogni AI**, which were added as
 rules. Two of the three self-gate on write access by default (Junie via a
 built-in permission check that only a custom `prompt:` input bypasses; Bonk via
 its `permissions: admin/write/CODEOWNERS` input), so their rules are written to
@@ -486,7 +485,7 @@ under-detection (the mirror image of the precision work above). First, the
 data, is not same-repo-guarded, and is not restricted to non-fork producer
 events. This surfaced a distinct "auto-fix on CI failure" family that direct-
 trigger reachability had missed, while the same-repo-guarded and push-only
-variants - the majority - correctly stay silent. Second, the
+variants (the majority) correctly stay silent. Second, the
 `anthropics/claude-code-action@v1` autonomous mode via
 `claude_args: --permission-mode bypassPermissions` /
 `--dangerously-skip-permissions` (§2), a full write/exec grant that uses no
@@ -498,7 +497,7 @@ previously-missed exposures rather than any loosening of the gate logic.
 
 A final precision refinement came from the unbiased star-window sweep. Adding
 its ~7,000 net-new most-starred workflow files (growing the corpus to 46,484
-files across 13,053 projects) produced exactly one new candidate - a reusable
+files across 13,053 projects) produced exactly one new candidate, a reusable
 workflow whose agent job was reached only after a separate `check-permission`
 job verified the commenter against an explicit allow-list, exposed transitively
 as `if: needs.check-permission.outputs.allowed == 'true'`. The scanner now
@@ -511,30 +510,30 @@ sweep: it strengthens the base rate without inflating the numerator.
 
 Two further refinements closed the numerator from 315/265 to the final
 **313/264**. First, a GitLab-specific author gate: a job whose only
-merge-request rule carries `when: manual` is not started automatically - in a
+merge-request rule carries `when: manual` is not started automatically. In a
 GitLab MR pipeline a manual job requires a project member with pipeline access
 to press "play," so an outside fork contributor who merely opens an MR cannot
 drive it. The scanner now treats such a job as gated (the GitLab analogue of
 GitHub's manual-dispatch guard), but *only* when every merge-request rule is
 manual and the job carries no other rule that auto-runs on fork-controllable
 input (a `$CI_COMMIT_MESSAGE`/title regex, a `@agent` comment webhook, or a bare
-MR rule that defaults to `on_success`). This suppressed two candidates - a
+MR rule that defaults to `on_success`). This suppressed two candidates: a
 manual-only `claude -p` review job in the widely-used PETSc scientific-computing
 library's mirror, and the manual review job in an autonomous-driving lab's
-pipeline - while leaving their auto-triggered siblings and every mixed
+pipeline, while leaving their auto-triggered siblings and every mixed
 manual+comment job (which a fork commit message still fires) correctly firing.
 
 Second, we validated the GitLab surface through an independent collection path.
 GitLab CI is frequently mirrored onto GitHub, where the pipeline lives in a
 root `.gitlab-ci.yml` that `include:`s fragments under `.gitlab/`, `.workflows/`,
-or `ci/` - files our GitHub collection, scoped to `.github/workflows/**`, never
+or `ci/`, files our GitHub collection, scoped to `.github/workflows/**`, never
 saw. A dedicated probe searched GitHub for `.gitlab-ci.yml` (and its split
 fragments) invoking an agent CLI, then fetched each hit's root file plus all
 included fragments so the scanner could reason across the split pipeline. It
-surfaced 14 firing projects - **every one of which was already in the corpus**
-via the direct gitlab.com collection, and zero net-new - an encouraging
+surfaced 14 firing projects, **every one of which was already in the corpus**
+via the direct gitlab.com collection, and zero net-new, an encouraging
 cross-method agreement that the GitLab findings are neither a collection artifact
-nor undercounted. Notably, high-collaboration mirrors of major projects that
+nor undercounted. High-collaboration mirrors of major projects that
 merely *mention* an agent (e.g. Datadog's `dd-trace-py`/`dd-trace-php`, 500+ and
 180+ forks) did **not** fire: their agent references sit in benign, non-fork-
 reachable contexts, exactly the true negatives a precision-first scanner must
@@ -546,30 +545,30 @@ already in hand. It
 searched GitHub for autonomy shapes (`--dangerously-skip-permissions`,
 `bypassPermissions`, `--yolo`, `--full-auto`) and the full agent-token vocabulary
 across both GitHub Actions and GitLab-CI-on-GitHub surfaces, then fetched *only*
-repositories not already collected - 3,630 net-new repos, 27,459 files, growing
+repositories not already collected: 3,630 net-new repos, 27,459 files, growing
 the corpus to 73,937 files across 16,864 projects. Scanning that net-new slice
 with the frozen ruleset produced **45 findings across 42 net-new projects**, and
 a hand audit of all 42 confirmed every one is genuinely fork-reachable, ungated,
-and write-capable - zero false positives, and, notably, zero *new rule gaps*:
+and write-capable, with zero false positives and zero *new rule gaps*:
 every finding was caught by an existing rule, which is the strongest signal yet
 that the family coverage is saturated. The pass added the two vendor-owned cases
 discussed in §4.5 and a cluster of the `workflow_run`
 "auto-fix on CI failure" family (`cursor_fix_ci_failures.yml`, `fix-ci.yml`,
 `fix-failed-checks.yml`) that the earlier `workflow_run` recall work had predicted
 would exist and this sweep confirmed in the wild. That a 59%-larger corpus moved
-precision not at all - every net-new candidate survived audit - is the reassuring
+precision not at all, since every net-new candidate survived audit, is the reassuring
 counterpart to the recall story: widening the net finds more real exposures
 without manufacturing false ones.
 
 As a final independent check, we re-scanned the entire corpus with a *separate,
-grackle-agnostic* detector that keys on the vulnerability's shape - a
-fork-reachable trigger, an autonomy/write signal, and a generic "agent" hint -
+grackle-agnostic* detector that keys on the vulnerability's shape (a
+fork-reachable trigger, an autonomy/write signal, and a generic "agent" hint)
 while explicitly excluding every agent grackle already knows, so that only
 genuinely unknown families could surface. After triaging the resulting
 candidate actions (the large majority are review/comment-only bots or CI-infra
 name collisions, both out of scope) and hand-auditing every ungated,
 fork-reachable, write-capable hit, the sweep surfaced no novel *vulnerability
-shape* - only three new agent *products* not yet named by a rule: the
+shape*, only three new agent *products* not yet named by a rule: the
 `potproject/code-agent` Claude/Codex wrapper, the `cognitivecomputations`
 AI-refactor action, and the `a5c` agent router. Adding those three rules moved
 the totals to **361 findings across 309 projects** with zero regressions and no
@@ -581,20 +580,20 @@ than key on action names at all, we re-ran the grackle-agnostic detector over
 every fork-reachable, write-capable job that carries *any* LLM runtime signal
 (a provider API key, a model runtime, an MCP server, or an autonomy flag),
 subtracted every agent and review-only bot already accounted for, and
-hand-audited the residue - including bespoke agents invoked through `run:` shell
+hand-audited the residue, including bespoke agents invoked through `run:` shell
 (`bun run cli.ts --yolo`, `node implement-with-glm.mjs`, `python agent.py`),
 local/composite-action wrappers (`uses: ./.github/actions/...`), and GitLab-CI
 files hosted on GitHub. Every genuinely ungated, fork-reachable hit resolved to
 either an agent grackle already covers or a bespoke, repo-local LLM script with
-no named CLI/action to anchor on - an inherent, documented boundary of a
+no named CLI/action to anchor on, an inherent, documented boundary of a
 signature-based model, not a missed vulnerability class. The one *actionable*
 gap the pass surfaced was an anchor omission, not a model omission: GitHub
 Copilot CLI's autonomous `--yolo` / `--enable-all-github-mcp-tools` invocation
 form, which the existing Copilot rule (anchored on `--allow-all-tools` /
-`--allow-tool`) did not recognize. Extending the anchor to the `--yolo` form -
+`--allow-tool`) did not recognize. Extending the anchor to the `--yolo` form,
 and, in the same pass, teaching the write-capability check to ignore `git push`
 / `gh pr` verbs that appear only as *quoted string data* in a test/eval workflow
-(a false-positive class the broader anchor would otherwise have introduced) -
+(a false-positive class the broader anchor would otherwise have introduced),
 moved the totals to **365 findings across 313 projects** with zero regressions
 and no collateral false positives.
 
@@ -602,15 +601,15 @@ A final, still-more-adversarial sweep converted the one documented *boundary* of
 the signature model into a detector. Auditing the ~24 grackle-silent, ungated,
 fork-reachable, write-capable jobs that invoke an LLM through inline `run:` shell
 rather than a named CLI, we found their common anchor is not a vendor name but
-the **completions/messages endpoint the workflow talks to** - an
+the **completions/messages endpoint the workflow talks to**, an
 `api.openai.com/v1`, `/v1/chat/completions`, `api.anthropic.com/v1`, or
 compatible base-URL, whether it appears in a `curl` line or a provider base-URL
 env that a local script then POSTs to. A tight behavioral rule anchored on that
 API *shape*, gated on untrusted trigger payload flowing into the prompt and on
 the job being fork-reachable, ungated, and write-capable, promotes this class
 from "inherent boundary" to a firing detector (20 findings) without naming any
-vendor. The same sweep surfaced one more named product - CodeMie
-(`@codemieai/code`) - added as its own rule. Hand-auditing every new hit then
+vendor. The same sweep surfaced one more named product, CodeMie
+(`@codemieai/code`), added as its own rule. Hand-auditing every new hit then
 exposed two *false-positive* classes the broad anchor would otherwise admit,
 both closed with precise gates rather than by narrowing the rule: (i) a
 **same-job allow-list step gate**, where every privileged step is guarded by
@@ -618,9 +617,9 @@ both closed with precise gates rather than by narrowing the rule: (i) a
 whitelist (observed across 12 projects), and (ii) an
 **indirect author-association gate**, where `github.event.*.author_association`
 is captured to an env var and an inline script rejects everyone but
-`OWNER`/`MEMBER`. With the generic rule
-also suppressed wherever a precise vendor rule already owns the same job, and
-after several mechanical detection refinements - making the raw-`claude` anchor
+`OWNER`/`MEMBER`. The generic rule was also
+suppressed wherever a precise vendor rule already owns the same job, and
+several mechanical detection refinements were applied: making the raw-`claude` anchor
 tolerant of shell line-continuations (agents are routinely invoked as a
 `\`-continued multi-line command with `--dangerously-skip-permissions` on a
 later line); correctly handling **OR-gate bypasses**, where a job's `if:`
@@ -633,7 +632,7 @@ treated as a bypass); treating `discussion` and `discussion_comment` as
 fork-reachable triggers (anyone can open or comment on a discussion, exactly
 like an issue); and recognizing `github.event.pull_request.user.login ==
 '<bot>'` (e.g. `dependabot[bot]`) as a sound trust gate, since such PRs always
-branch inside the base repository and never a fork - the totals settled at
+branch inside the base repository and never a fork. With those in place, the totals settled at
 **589 findings across 534 projects** across **36 rules**, with zero
 regressions and no collateral false positives. The net effect reinforces
 the central claim: the vulnerability *shape* grackle models is saturated, and
