@@ -14,7 +14,8 @@
   <a href="src/rules"><img src="https://img.shields.io/badge/Rules-36-blue?style=flat-square&logo=rust&logoColor=white" alt="Rules" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SLSA-Level%203-success?style=flat-square&logo=slsa&logoColor=white" alt="SLSA Build Level 3" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SBOM-CycloneDX-success?style=flat-square&logo=cyclonedx&logoColor=white" alt="CycloneDX SBOM" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/Sigstore-verified-success?style=flat-square&logo=sigstore&logoColor=white" alt="Sigstore verified" /></a>
+  <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/Sigstore-verified-success?style=flat-square&logo=sigstore&logoColor=white" alt="Sigstore verified" /></a>&nbsp;&nbsp;
+  <a href="https://doi.org/10.5281/zenodo.21497551"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21497551-blue?style=flat-square" alt="DOI" /></a>
 </p>
 <!-- BADGES_END -->
 
@@ -345,3 +346,22 @@ Open a private security advisory via the
 rather than a public issue. Vulnerabilities in grackle itself are in scope;
 vulnerabilities in the *workflows grackle scans* are not, those belong to the
 scanned repository's maintainer.
+
+## Citation
+
+The methodology and full results are in the whitepaper:
+[Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey](https://cpeoples.github.io/grackle/whitepaper/).
+
+Peoples, C. (2026). *Fork-Triggerable AI Coding Agents in CI: A Wide-Net
+Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
+
+```bibtex
+@misc{peoples2026forktriggerable,
+  author       = {Peoples, Christopher},
+  title        = {Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.21497551},
+  url          = {https://doi.org/10.5281/zenodo.21497551}
+}
+```

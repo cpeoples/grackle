@@ -708,3 +708,19 @@ the rule, a severity, control-framework metadata, and a generated fix, and can
 be exported as SARIF, GitLab SAST, or CycloneDX for independent verification.
 
 Rather than enumerate every agent's homepage here, the canonical and always-current list of covered families is the rule set itself. Each rule names the family, the exact CLI or action it anchors on, and the invocation shape that makes it dangerous, so a reader can map any finding back to a concrete, distributable tool.
+
+## How to cite
+
+Peoples, C. (2026). *Fork-Triggerable AI Coding Agents in CI: A Wide-Net
+Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
+
+```bibtex
+@misc{peoples2026forktriggerable,
+  author       = {Peoples, Christopher},
+  title        = {Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.21497551},
+  url          = {https://doi.org/10.5281/zenodo.21497551}
+}
+```
