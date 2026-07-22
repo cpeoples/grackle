@@ -652,6 +652,18 @@ than a proof-of-concept. The two lines of work reinforce each other: the
 disclosures establish that the primitive is critical, and this survey
 establishes that it is common.
 
+A parallel thread targets agent tool servers rather than CI workflows. Invariant
+Labs (May 2025) showed that a public issue could steer an agent using the GitHub
+MCP server into reading a private repository and leaking it back through a pull
+request, and a July 2026 disclosure against a vendor Azure DevOps MCP server
+showed a hidden pull-request comment steering a reviewer's agent across projects
+it should not reach. Both are instances of the same trifecta named by Willison:
+private-data access, untrusted content, and an exfiltration path in one agent.
+These are runtime exploits of a specific integration and depend on an agent
+already running with broad credentials. This paper addresses the configuration
+that makes such an agent reachable from untrusted input in the first place, and
+detects it statically in the workflow definition before any agent runs.
+
 ## 7. Recommendations
 
 For teams running AI agents in CI:
