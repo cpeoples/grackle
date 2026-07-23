@@ -661,19 +661,35 @@ fn codemie() -> RuleSpec {
 }
 
 fn agent_shell_exec_secret_exposure() -> RuleSpec {
-    // Anchor: one of the shell-autonomy CLIs invoked with a flag that lets it
-    // run arbitrary shell (`--dangerously-skip-permissions`, an autonomous
-    // `--permission-mode`, `--allowedTools "...Bash..."`, `--yolo`,
-    // `--approval-mode yolo`). The tool name and the flag may sit on the same
-    // line or across a `\`-continued multi-line invocation, matching the same
-    // window the per-vendor CRITICAL anchors use. This is the repo-write-less
-    // complement of those rules: the ForkShellExec post-filter demands a secret
-    // in the job and the *absence* of provable write, so a write-capable job is
-    // owned by the CRITICAL rule and never double-reported here.
-    let shell_flag = r#"(?:--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\b|--full-auto\b|--permission-mode[\s=]+['"]?(?:bypassPermissions|acceptEdits|auto)\b|--approval-mode[\s=]+['"]?(?:yolo|auto_edit|auto)\b|--allowed-?tools[\s=]+['"][^'"]*\b(?:Bash|Edit|Write|MultiEdit)\b|--allow-all-tools\b)"#;
+    // A dangerous tool grant hands the agent a real shell or file write, not a
+    // scoped read/comment helper: `Bash(gh pr diff:*)` and `Bash(gh pr comment:*)`
+    // are review-only and must not match, while bare `Bash`, `Bash(*)`, `Bash(`
+    // wrapping a shell/git-mutating command, and `Edit`/`Write`/`MultiEdit`/
+    // `NotebookEdit` are arbitrary execution or file writes. Shared by both
+    // invocation shapes below and kept in step with the CRITICAL rule's vocabulary.
+    let danger_tool = r#"(?:\bBash\b(?!\s*\()|\bBash\(\s*\*\s*\)|\bBash\(\s*(?:gh\s*:\s*\*|gh\s+api\b|git\s*:\s*\*|git\s+(?:add|commit|push|branch|checkout|rebase|reset|tag|merge|clone|remote)\b|(?:ba)?sh\b|zsh\b|python[0-9.]*\b|node\b|npm\b|pnpm\b|yarn\b|npx\b|pip[0-9]*\b|ruby\b|perl\b|go\b|curl\b|wget\b|eval\b|exec\b|chmod\b|cp\b|mv\b|mkdir\b|rm\b|tee\b|\.?/|~/)|(?<![\w(])(?:MultiEdit|NotebookEdit|Edit|Write)(?:\([^)]*\))?(?![\w]))"#;
+    // CLI shape: an autonomy CLI run with a flag that lets it run arbitrary shell.
+    let shell_flag = format!(
+        r#"(?:--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\b|--full-auto\b|--permission-mode[\s=]+['"]?(?:bypassPermissions|acceptEdits|auto)\b|--approval-mode[\s=]+['"]?(?:yolo|auto_edit|auto)\b|--allowed-?tools[\s=]+['"][^'"]*?{danger}|--allow-all-tools\b)"#,
+        danger = danger_tool
+    );
+    // Action shape: `anthropics/claude-code(-base)-action` whose `allowed_tools:`
+    // (YAML or `claude_args --allowedTools`) grants a dangerous tool, or whose
+    // `claude_args` carries an autonomy flag. This is the shape that reached RCE
+    // in the Cline compromise with the job holding only `contents: read`.
+    let action_grant = format!(
+        r#"anthropics/claude-code-(?:base-)?action@(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){{0,4000}}?(?:(?<!dis)allowed[_-]?[Tt]ools[\s=:]+(?:(?!disallowedTools|(?:direct_|system_|user_)?prompt\s*:)[\s\S]){{0,400}}?{danger}|claude_args\s*:(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){{0,400}}?(?:--dangerously-skip-permissions|--permission-mode[\s=]+['"]?(?:bypassPermissions|acceptEdits|auto)\b|--allowed-?tools[\s=]+['"][^'"]*?{danger}))"#,
+        danger = danger_tool
+    );
+    // Fire on either shape. The tool name and flag may sit on one line or span a
+    // `\`-continued invocation, over the same window the per-vendor CRITICAL
+    // anchors use. This is their repo-write-less complement: the ForkShellExec
+    // post-filter demands a secret and the *absence* of provable write, so a
+    // write-capable job is owned by the CRITICAL rule and never double-reported.
     let anchor = format!(
-        r#"(?im)(?<![\w./-])(?:claude|gemini|cursor-agent|opencode|aider|codex)(?![\w./-])[ \t]+(?:(?:exec|run)[ \t]+)?(?:{flag}|["'$\\-](?:[^\n]|\\\r?\n){{0,600}}?{flag})"#,
-        flag = shell_flag
+        r#"(?im)(?:(?<![\w./-])(?:claude|gemini|cursor-agent|opencode|aider|codex)(?![\w./-])[ \t]+(?:(?:exec|run)[ \t]+)?(?:{flag}|["'$\\-](?:[^\n]|\\\r?\n){{0,600}}?{flag})|{action})"#,
+        flag = shell_flag,
+        action = action_grant
     );
     RuleSpec {
         id: "fork_triggerable_agent_shell_exec_secret_exposure",
@@ -708,6 +724,31 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
                 "      - run: npm install -g @google/gemini-cli\n",
                 "      - env:\n          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}\n",
                 "        run: gemini --yolo -p \"Analyze the changed files in this PR.\"\n"
+            ),
+            // Action form (Cline compromise shape): claude-code-action opened to
+            // fork contributors (allowed_non_write_users "*") and granted
+            // Bash/Write/Edit on issue content, an API key in env, and no
+            // provable repo write (contents: read). The agent's shell reached
+            // RCE on the runner and could exfiltrate the key.
+            concat!(
+                "on:\n  issues:\n    types: [opened, edited]\n",
+                "permissions:\n  contents: read\n  issues: write\n",
+                "jobs:\n  triage:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - uses: anthropics/claude-code-action@v1\n        with:\n",
+                "          allowed_non_write_users: \"*\"\n",
+                "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "          allowed_tools: \"Bash,Read,Write,Edit\"\n"
+            ),
+            // CLI form, wildcard gh grant: `--allowedTools "Bash(gh:*)"` lets the
+            // agent run any gh command (gh pr merge, gh api ...), which is
+            // repo-mutating and can exfiltrate; distinct from a scoped
+            // Bash(gh pr diff:*) review helper.
+            concat!(
+                "on:\n  pull_request_target:\n    types: [opened]\n",
+                "jobs:\n  review:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "        run: claude -p \"$PROMPT\" --allowedTools \"Bash(gh:*)\"\n"
             ),
         ],
         negative_examples: &[
@@ -759,6 +800,39 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
                 "    runs-on: ubuntu-latest\n",
                 "    steps:\n      - env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n",
                 "        run: claude -p \"$BODY\" --dangerously-skip-permissions\n"
+            ),
+            // Action form, read-only tool grant: no Bash/Edit/Write, so the
+            // agent cannot run a shell even with a key present.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  triage:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n",
+                "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "          allowed_tools: \"Read,Glob,Grep\"\n"
+            ),
+            // Action form, comment/read-only Bash scoping: `Bash(gh pr diff:*)`
+            // and `Bash(gh pr comment:*)` are review helpers, not an arbitrary
+            // shell, so this review job is not the shell-exec class.
+            concat!(
+                "on:\n  pull_request_target:\n    types: [opened]\n",
+                "jobs:\n  review:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n",
+                "          allowed_non_write_users: \"*\"\n",
+                "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "          claude_args: |\n",
+                "            --allowedTools \"Task,Glob,Grep,Read,Bash(gh pr diff:*),Bash(gh pr view:*)\"\n"
+            ),
+            // Action form with a provable repo write (contents: write): the
+            // CRITICAL repo-write rule owns this job, so the HIGH secret-exposure
+            // rule must not also fire.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  triage:\n    permissions:\n      contents: write\n",
+                "    runs-on: ubuntu-latest\n",
+                "    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n",
+                "          allowed_non_write_users: \"*\"\n",
+                "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "          allowed_tools: \"Bash,Read,Write,Edit\"\n"
             ),
         ],
     }
