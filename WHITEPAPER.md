@@ -429,6 +429,22 @@ count, but the organizational slice is where the consequences concentrate. (To
 respect responsible disclosure, no owner in this table is a *vulnerable* named
 project; owner classes are reported in aggregate.)
 
+### 4.6 Remediation follow-up
+
+The headline figures are a point-in-time measurement taken during the July 2026
+crawl. To see how the population moved afterward, we re-fetched every distinct
+finding file at its repository's current default-branch state roughly two weeks
+later and re-scanned it with the same detector. **26% of the distinct workflow
+files that carried a finding no longer flag**: most were rewritten in place to
+add an author or non-fork gate, to run the agent read-only, or to drop the write
+token, and a smaller share had the vulnerable workflow deleted outright. The
+rest still flag unchanged. We do not attribute this movement solely to our
+disclosure; agent-in-CI wiring churns quickly and some of these workflows would
+have changed regardless. But the direction tracks the disclosure timeline: a
+detectable finding with a concrete remediation is one maintainers act on. The
+totals above therefore describe the exposure that existed at crawl time, not the
+live population on any later date.
+
 ## 5. Discussion
 
 Three findings stand out.
@@ -654,6 +670,18 @@ new detection categories.
 
 ## 6. Related work
 
+The composed primitive this paper measures is the AI-agent instance of a
+pre-existing attack class. Poisoned Pipeline Execution (PPE), documented by Palo
+Alto Networks' Unit 42, is the general case: an attacker who can influence what a
+CI pipeline runs — through a fork pull request, a branch, or a configuration file
+the pipeline reads — gains code execution in the pipeline's privileged context.
+The fork-triggerable agent is PPE with the agent as the injection surface: the
+untrusted input is a PR title, issue body, or comment rather than a build script,
+and the execution happens through the agent's shell or write tools rather than a
+CI step the attacker edited directly. Framing it this way clarifies that the
+mitigations are the same ones PPE already established (gate untrusted triggers,
+withhold privileges from fork-reachable jobs) applied to a new surface.
+
 The exploitability of AI agents in GitHub Actions has been demonstrated in
 prior disclosures. The most directly related is "Comment and Control" (Guan,
 Liu, and Zhong, disclosed April 2026), which showed that a single crafted pull
@@ -687,9 +715,32 @@ contribution is confirmed runtime exploitability on a handful of workflows; this
 paper's is prevalence of the enabling configuration across the corpus. The two
 are the natural pair: GitInject shows the exploit fires in production, and this
 survey shows how often the configuration that permits it actually exists.
-Notably, GitInject's own execution-based method also surfaces where a static
+GitInject's own execution-based method also surfaces where a static
 signal overstates reachability, a distinction this scanner encodes directly in
 its gating (see the note on `workflow_run` below).
+
+Two 2026 incidents show the primitive being exploited and hunted rather than
+only demonstrated. In the Cline compromise (Khan, disclosed February 2026), an
+issue-triage workflow on a coding agent with more than five million installs ran
+`anthropics/claude-code-action` on the title and body of any opened issue, with
+`allowed_non_write_users` set to `"*"` and shell, read, and write tools enabled.
+A crafted issue title told the agent to `npm install` a package from an imposter
+commit, whose `preinstall` hook ran on the runner. The job held only
+`contents: read`; the exploit ran through the agent's own shell tool and the
+credentials in the runner environment, not a repository write scope, and then
+pivoted via Actions cache poisoning into the privileged nightly release workflow
+to steal publishing tokens — an attacker-published `cline` release followed
+eight days later. Separately, the Hackerbot-Claw campaign (February 2026) ran an
+autonomous bot that scanned roughly 47,000 public repositories for this
+configuration and exploited several, in one case stealing an org-scoped token,
+deleting releases, and publishing a malicious editor extension. These place the
+present survey in context: Cline is a single confirmed exploitation of the
+composed primitive, Hackerbot-Claw is evidence that adversaries already
+enumerate it at a scale comparable to this corpus, and this paper measures how
+widespread the enabling configuration is across the ecosystem. The Cline shape
+also refined this scanner: an agent granted a shell tool reaches code execution
+on the runner even when the job carries no repository write scope, so that shape
+is now reported on its own rather than requiring a provable repository write.
 
 A parallel thread targets agent tool servers rather than CI workflows. Invariant
 Labs (May 2025) showed that a public issue could steer an agent using the GitHub
@@ -735,6 +786,33 @@ the rule, a severity, control-framework metadata, and a generated fix, and can
 be exported as SARIF, GitLab SAST, or CycloneDX for independent verification.
 
 Rather than enumerate every agent's homepage here, the canonical and always-current list of covered families is the rule set itself. Each rule names the family, the exact CLI or action it anchors on, and the invocation shape that makes it dangerous, so a reader can map any finding back to a concrete, distributable tool.
+
+## References
+
+The prior work and incidents referenced above, with public source locators
+(disclosures cited by name in the text without a public URL are omitted):
+
+- Poisoned Pipeline Execution (PPE): Palo Alto Networks Unit 42, *Poisoned
+  Pipeline Execution: A Deep Dive*.
+  https://www.paloaltonetworks.com/blog/cloud-security/poisoned-pipeline-execution-deep-dive/
+- GitInject: Isbarov et al., *GitInject: Prompt Injection Against Agentic CI
+  Workflows*, arXiv:2606.09935 (June 2026). https://arxiv.org/abs/2606.09935
+- Cline / "Clinejection": A. Khan, *Clinejection — Compromising Cline's
+  Production Releases just by Prompting an Issue Triager* (disclosed Feb 9,
+  2026; exploited in the wild Feb 17, 2026).
+  https://adnanthekhan.com/posts/clinejection/ — corroborated by Snyk,
+  https://snyk.io/blog/cline-supply-chain-attack-prompt-injection-github-actions/
+- Hackerbot-Claw campaign (Feb 27 – Mar 1, 2026): Pillar Security,
+  https://www.pillar.security/blog/hackerbot-claw-adversarial-agent-targets-top-github-repos ;
+  StepSecurity,
+  https://www.stepsecurity.io/blog/hackerbot-claw-github-actions-exploitation ;
+  Threat Landscape,
+  https://threatlandscape.io/blog/hackerbot-claw-ai-bot-github-actions-supply-chain-attack
+- Invariant Labs, *GitHub MCP Exploited: Accessing private repositories via MCP*
+  (May 26, 2025). https://invariantlabs.ai/blog/mcp-github-vulnerability
+- S. Willison, *The lethal trifecta for AI agents: private data, untrusted
+  content, and external communication* (June 16, 2025).
+  https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/
 
 ## How to cite
 
