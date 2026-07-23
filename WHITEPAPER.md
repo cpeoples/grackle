@@ -181,6 +181,19 @@ the "auto-fix on CI failure" family (`fix-ci.yml`, `claude-autofix.yml`,
 `cursor_fix_ci_failures.yml`), where a fork PR's failing test run silently
 escalates into a write-capable agent editing the checked-out fork branch.
 
+One variant deserves a precision caveat. When the `workflow_run` consumer keys
+its author gate on `github.event.workflow_run.pull_requests[0]`, that array is
+empty for runs produced by a forked repository, so the gate short-circuits and
+the job is skipped for exactly the external contributor the trifecta requires.
+GitInject (§6) confirmed this empirically: an auto-fix workflow gated on
+`pull_requests` fired from the owner's account but never from a fork. The
+scanner does not treat a `pull_requests`-populated author gate as reachable
+evidence on its own; the `workflow_run` findings it reports rest on the
+data-ingest, same-repo-guard, and producer-event conditions above, which hold
+regardless of that array. The genuinely dangerous shape is the consumer that
+checks out and operates on the fork's `head_branch` or downloaded artifact under
+write, not one whose only link to the fork is an empty `pull_requests` field.
+
 ### Autonomous mode via `claude_args`
 
 `anthropics/claude-code-action@v1` grants tool permissions two ways: the legacy
@@ -663,6 +676,20 @@ seventy-four-thousand-file corpus, and ships a reproducible detection model rath
 than a proof-of-concept. The two lines of work reinforce each other: the
 disclosures establish that the primitive is critical, and this survey
 establishes that it is common.
+
+GitInject (Isbarov et al., arXiv:2606.09935, June 2026) sits between the two.
+It provisions ephemeral repositories, fires real GitHub workflow runs, and
+confirms eleven named prompt-injection attacks across four providers under true
+production semantics, including a config-file injection surface (a `CLAUDE.md`,
+`AGENTS.md`, or `GEMINI.md` added in a PR branch and loaded as operator-level
+instruction) that a purely static scan of the workflow YAML does not see. Its
+contribution is confirmed runtime exploitability on a handful of workflows; this
+paper's is prevalence of the enabling configuration across the corpus. The two
+are the natural pair: GitInject shows the exploit fires in production, and this
+survey shows how often the configuration that permits it actually exists.
+Notably, GitInject's own execution-based method also surfaces where a static
+signal overstates reachability, a distinction this scanner encodes directly in
+its gating (see the note on `workflow_run` below).
 
 A parallel thread targets agent tool servers rather than CI workflows. Invariant
 Labs (May 2025) showed that a public issue could steer an agent using the GitHub
