@@ -817,7 +817,7 @@ The prior work and incidents referenced above, with public source locators
 ## How to cite
 
 Peoples, C. (2026). *Fork-Triggerable AI Coding Agents in CI: A Wide-Net
-Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
+Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497550
 
 ```bibtex
 @misc{peoples2026forktriggerable,
@@ -825,7 +825,7 @@ Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
   title        = {Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey},
   year         = {2026},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.21497551},
-  url          = {https://doi.org/10.5281/zenodo.21497551}
+  doi          = {10.5281/zenodo.21497550},
+  url          = {https://doi.org/10.5281/zenodo.21497550}
 }
 ```
