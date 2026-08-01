@@ -15,7 +15,7 @@
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SLSA-Level%203-success?style=flat-square&logo=slsa&logoColor=white" alt="SLSA Build Level 3" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SBOM-CycloneDX-success?style=flat-square&logo=cyclonedx&logoColor=white" alt="CycloneDX SBOM" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/Sigstore-verified-success?style=flat-square&logo=sigstore&logoColor=white" alt="Sigstore verified" /></a>&nbsp;&nbsp;
-  <a href="https://doi.org/10.5281/zenodo.21497551"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21497551-blue?style=flat-square" alt="DOI" /></a>
+  <a href="https://doi.org/10.5281/zenodo.21497550"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21497550-blue?style=flat-square" alt="DOI" /></a>
 </p>
 <!-- BADGES_END -->
 
@@ -353,7 +353,7 @@ The methodology and full results are in the whitepaper:
 [Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey](https://cpeoples.github.io/grackle/whitepaper/).
 
 Peoples, C. (2026). *Fork-Triggerable AI Coding Agents in CI: A Wide-Net
-Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
+Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497550
 
 ```bibtex
 @misc{peoples2026forktriggerable,
@@ -361,7 +361,7 @@ Survey*. Zenodo. https://doi.org/10.5281/zenodo.21497551
   title        = {Fork-Triggerable AI Coding Agents in CI: A Wide-Net Survey},
   year         = {2026},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.21497551},
-  url          = {https://doi.org/10.5281/zenodo.21497551}
+  doi          = {10.5281/zenodo.21497550},
+  url          = {https://doi.org/10.5281/zenodo.21497550}
 }
 ```
