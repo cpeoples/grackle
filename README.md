@@ -31,7 +31,7 @@ It is a focused port of the fork-triggerable-agent detection built in
 carrying over the same anchors, family proofs, reachability post-filters, and
 control-framework metadata so findings match one-to-one.
 
-**<!--RULES-->36<!--/RULES--> rules** across four evaluation families, all
+**<!--RULES-->40<!--/RULES--> rules** across four evaluation families, all
 self-validated against a built-in positive and negative example.
 
 ### Built with
