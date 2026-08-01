@@ -153,8 +153,11 @@ pub fn has_secret_bearing_fork_trigger(content: &str) -> bool {
 ///    `actions/download-artifact` with `run-id: workflow_run.id`, a checkout of
 ///    `workflow_run.head_sha`, or a read of `workflow_run.pull_requests`.
 /// 3. It is **not restricted to same-repo / non-fork sources**: no
-///    `workflow_run.head_repository.full_name == github.repository` guard, and
-///    it is not filtered to only `push`/`schedule`/`release` producer events.
+///    `workflow_run.head_repository.full_name == github.repository` guard, not
+///    filtered to only `push`/`schedule`/`release` producer events, and not
+///    pinned to a base-repo branch a fork cannot produce
+///    (`workflow_run.head_branch == 'main'` or `== repository.default_branch`)
+///    or the `dependabot/` prefix.
 ///
 /// Write capability and the agent anchor are judged separately by the calling
 /// rule, exactly as for a directly fork-reachable workflow, so a `contents:
@@ -197,6 +200,19 @@ pub fn workflow_run_escalation(content: &str) -> bool {
         )
         .unwrap()
     });
+    // The consumer only acts when the triggering run was on a specific base-repo
+    // branch: `workflow_run.head_branch == 'main'`, or a comparison to the repo's
+    // own default branch (`== github.event.repository.default_branch`). A fork
+    // PR's producer run reports the fork's own branch, so it cannot match a
+    // base-repo branch the consumer names, exactly as `github.ref ==
+    // 'refs/heads/main'` gates a direct trigger. Equality only: a negation
+    // (`!=`) still admits forks.
+    static PROTECTED_BRANCH_ONLY: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)github\.event\.workflow_run\.head_branch\s*==\s*(?:['\x22][^'\x22]|github\.event\.repository\.default_branch\b|github\.default_branch\b)",
+        )
+        .unwrap()
+    });
     // An explicit admission of the PR producer event defeats a NON_PR_PRODUCER
     // guard written as an OR (`event == 'push' || event == 'pull_request'`).
     static ADMITS_PR_PRODUCER: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -210,6 +226,12 @@ pub fn workflow_run_escalation(content: &str) -> bool {
         return false;
     }
     if DEPENDABOT_BRANCH_ONLY.is_match(content) {
+        return false;
+    }
+    // A branch-equality gate is only sound when the whole `if:` demands it. If an
+    // `||` disjunct re-admits an ungated fork producer, the gate is defeated, the
+    // same OR-readmission reasoning `NON_PR_PRODUCER_ONLY` uses.
+    if PROTECTED_BRANCH_ONLY.is_match(content) && !ADMITS_PR_PRODUCER.is_match(content) {
         return false;
     }
     if NON_PR_PRODUCER_ONLY.is_match(content) && !ADMITS_PR_PRODUCER.is_match(content) {
@@ -554,7 +576,7 @@ pub static JOB_WRITE: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// workflows, which would silently misread a gated workflow as ungated).
 pub static AUTHOR_GATE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)getCollaboratorPermissionLevel|author_association\s*(?:==|!=|\bin\b|\bnot in\b)|author_association\b[^\n)]{0,120}?\)\s*(?:==|!=)\s*['"]?(?:OWNER|MEMBER|COLLABORATOR)|contains\(\s*fromJSON\('\[\s*"(?:OWNER|MEMBER|COLLABORATOR)|\[\s*['"]OWNER['"]\s*,\s*['"](?:MEMBER|COLLABORATOR)['"]|contains\(\s*['"][^'"\n]*(?:OWNER|MEMBER|COLLABORATOR)[^'"\n]*['"]\s*,\s*[^)\n]*?author_association|contains\(\s*fromJSON\([^)]*\)\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|contains\(\s*(?:vars|secrets|env)\.[A-Za-z0-9_]+\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|allow_forks\s*:\s*["']?false|permission\.permission|collaborators/[^/\s]+/permission|["']?(?:admin|maintain|write)["']?\s*[!=]=\s*["']?\$?(?:PERMISSION|permission)|\$?(?:PERMISSION|permission)["']?\s*[!=]=\s*["'](?:admin|maintain|write)|(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login|review\.user\.login)\s*==\s*['"]|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.(?:event\.)?repository\.owner\.login|==\s*github\.(?:event\.)?repository\.owner\.login|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.repository_owner\b|==\s*github\.repository_owner\b|contains\(\s*github\.event\.[a-z_.]*labels\.\*\.name|contains\(\s*github\.event\.label\.name|github\.event\.label\.name\s*==|github\.event\.action\s*==\s*['"]labeled|head\.repo\.full_name\s*(?:==|!==|!=)\s*|head\.repo\.fork\b|is_fork\s*(?:==|!=)"#,
+        r#"(?i)getCollaboratorPermissionLevel|author_association\s*(?:==|!=|\bin\b|\bnot in\b)|author_association\b[^\n)]{0,120}?\)\s*(?:==|!=)\s*['"]?(?:OWNER|MEMBER|COLLABORATOR)|contains\(\s*fromJSON\('\[\s*"(?:OWNER|MEMBER|COLLABORATOR)|\[\s*['"]OWNER['"]\s*,\s*['"](?:MEMBER|COLLABORATOR)['"]|contains\(\s*['"][^'"\n]*(?:OWNER|MEMBER|COLLABORATOR)[^'"\n]*['"]\s*,\s*[^)\n]*?author_association|contains\(\s*fromJSON\([^)]*\)\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|contains\(\s*(?:vars|secrets|env)\.[A-Za-z0-9_]+\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|allow_forks\s*:\s*["']?false|permission\.permission|collaborators/[^/\s]+/permission|["']?(?:admin|maintain|write)["']?\s*[!=]=\s*["']?\$?(?:PERMISSION|permission)|\$?(?:PERMISSION|permission)["']?\s*[!=]=\s*["'](?:admin|maintain|write)|(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login|review\.user\.login)\s*==\s*['"]|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.(?:event\.)?repository\.owner\.login|==\s*github\.(?:event\.)?repository\.owner\.login|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.repository_owner\b|==\s*github\.repository_owner\b|github\.repository_owner\s*==\s*['"]|contains\(\s*github\.event\.[a-z_.]*labels\.\*\.name|contains\(\s*github\.event\.label\.name|github\.event\.label\.name\s*==|github\.event\.action\s*==\s*['"]labeled|head\.repo\.full_name\s*(?:==|!==|!=)\s*|head\.repo\.fork\b|is_fork\s*(?:==|!=)"#,
     )
     .unwrap()
 });
@@ -710,10 +732,14 @@ pub fn job_exposes_secret(lines: &[&str], line_index: usize) -> bool {
 /// admit only non-fork events (`github.event_name == 'push' | 'schedule' |
 /// 'workflow_dispatch'`), require a completed merge (`pull_request.merged ==
 /// true`, which only a maintainer can cause), or restrict to a protected
-/// default branch (`github.ref == 'refs/heads/main'`).
+/// default branch (`github.ref == 'refs/heads/main'`) or a tag ref
+/// (`startsWith(github.ref, 'refs/tags/')` / `github.ref_type == 'tag'`): a tag
+/// can only be pushed by someone with write access, and `github.ref` is a tag
+/// ref only on a tag-push event, never on a fork `pull_request` (whose ref is
+/// `refs/pull/N/merge`) or an `issue_comment`/`issues` event.
 static JOB_NON_FORK_EVENT_GUARD: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)github\.event_name\s*!=\s*['"]pull_request(?:_target)?['"]|github\.event_name\s*==\s*['"](?:push|schedule|workflow_dispatch|release|create|tag)['"]|github\.event\.pull_request\.merged\s*==\s*(?:true|['"]true['"])|github\.ref\s*==\s*['"]refs/heads/"#,
+        r#"(?i)github\.event_name\s*!=\s*['"]pull_request(?:_target)?['"]|github\.event_name\s*==\s*['"](?:push|schedule|workflow_dispatch|release|create|tag)['"]|github\.event\.pull_request\.merged\s*==\s*(?:true|['"]true['"])|github\.ref\s*==\s*['"]refs/heads/|startsWith\(\s*github\.ref\s*,\s*['"]refs/tags/|github\.ref_type\s*==\s*['"]tag['"]"#,
     )
     .unwrap()
 });
@@ -1524,6 +1550,73 @@ jobs:
     }
 
     #[test]
+    fn workflow_run_pinned_to_base_branch_is_not_escalation() {
+        // head_branch == 'main' means the producer ran on the base repo's main;
+        // a fork PR run reports the fork's branch, so it never reaches the job.
+        let wf = "\
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+jobs:
+  release:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+";
+        assert!(!workflow_run_escalation(wf));
+    }
+
+    #[test]
+    fn workflow_run_pinned_to_default_branch_var_is_not_escalation() {
+        // Comparing head_branch to the repo's own default branch is the same
+        // non-fork gate as a branch literal: a fork producer run reports the
+        // fork's branch, so it never equals the base repo's default.
+        let wf = "\
+on:
+  workflow_run:
+    workflows: [quality]
+    types: [completed]
+jobs:
+  draft-fix:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.head_branch == github.event.repository.default_branch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+";
+        assert!(!workflow_run_escalation(wf));
+    }
+
+    #[test]
+    fn workflow_run_base_branch_or_readmitting_pr_producer_is_escalation() {
+        // A base-branch gate defeated by an `|| event == 'pull_request'` disjunct
+        // still lets a fork producer in, so it must stay reachable.
+        let wf = "\
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+jobs:
+  release:
+    if: >
+      github.event.workflow_run.head_branch == 'main' ||
+      github.event.workflow_run.event == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+";
+        assert!(workflow_run_escalation(wf));
+    }
+
+    #[test]
     fn workflow_run_without_run_data_ingestion_is_not_escalation() {
         // A workflow_run consumer that merely comments on its own CI, never
         // checking out or downloading the fork run's data, is not our concern.
@@ -1647,6 +1740,13 @@ jobs:
     #[test]
     fn author_gate_matches_repository_owner_equality() {
         assert!(AUTHOR_GATE.is_match("    if: github.actor == github.repository_owner\n"));
+    }
+
+    #[test]
+    fn author_gate_matches_repository_owner_literal() {
+        // `github.repository_owner == 'org'` is a fork-exclusion gate: on a fork
+        // the owner is the forker, so the job only runs in the base repo.
+        assert!(AUTHOR_GATE.is_match("    if: github.repository_owner == 'acme'\n"));
     }
 
     #[test]
@@ -1898,6 +1998,37 @@ jobs:
     #[test]
     fn job_guard_requiring_merge_suppresses() {
         let wf = "on:\n  pull_request:\n    types: [closed]\njobs:\n  release:\n    if: github.event.pull_request.merged == true\n    steps:\n      - run: opencode run \"$PROMPT\"\n";
+        let lines: Vec<&str> = wf.lines().collect();
+        let idx = lines.iter().position(|l| l.contains("opencode")).unwrap();
+        assert!(job_gated_on_non_fork_event(&lines, idx));
+    }
+
+    #[test]
+    fn job_guard_on_tag_ref_suppresses() {
+        // `startsWith(github.ref, 'refs/tags/')` only holds on a tag-push event.
+        // A fork PR's ref is `refs/pull/N/merge`, and only someone with write
+        // access can push a tag, so a tag-gated release job is not fork-reachable
+        // even when the workflow's top-level `on:` also lists `pull_request`.
+        let wf = concat!(
+            "on:\n  pull_request:\n    branches: [main]\n  push:\n    tags: ['v*']\n",
+            "jobs:\n  release:\n    if: startsWith(github.ref, 'refs/tags/v')\n",
+            "    steps:\n      - uses: actions/ai-inference@v2\n        with:\n          prompt-file: notes.txt\n"
+        );
+        let lines: Vec<&str> = wf.lines().collect();
+        let idx = lines
+            .iter()
+            .position(|l| l.contains("ai-inference"))
+            .unwrap();
+        assert!(job_gated_on_non_fork_event(&lines, idx));
+    }
+
+    #[test]
+    fn job_guard_on_ref_type_tag_suppresses() {
+        let wf = concat!(
+            "on:\n  pull_request:\n  push:\n    tags: ['v*']\n",
+            "jobs:\n  release:\n    if: github.ref_type == 'tag'\n",
+            "    steps:\n      - run: opencode run \"$PROMPT\"\n"
+        );
         let lines: Vec<&str> = wf.lines().collect();
         let idx = lines.iter().position(|l| l.contains("opencode")).unwrap();
         assert!(job_gated_on_non_fork_event(&lines, idx));

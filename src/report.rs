@@ -287,7 +287,7 @@ pub fn rules_json(rules: &[crate::rules::RuleSpec]) -> String {
 fn concern_of(family: &crate::rules::Family) -> &'static str {
     match family {
         crate::rules::Family::Installed { .. } => "installed",
-        crate::rules::Family::Action => "action",
+        crate::rules::Family::Action { .. } => "action",
         crate::rules::Family::Gitlab { .. } => "gitlab",
         crate::rules::Family::ForkShellExec { .. } => "shell-exec",
     }

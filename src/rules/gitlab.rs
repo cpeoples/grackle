@@ -36,7 +36,7 @@ fn agent_with_write_or_exec() -> RuleSpec {
         severity: Severity::High,
         title: "Fork-reachable GitLab CI coding agent with write or execute capability",
         anchor: crate::rules::compile_anchor(
-            r#"(?:^|[\s;&|])(?:claude\s+(?:--\S+\s+)*-p\b|codex\s+exec\b|aider\b|cursor-agent\b|qwen\b[^\n]*\s-p\b|opencode\s+run\b|goose\s+run\b|gemini\b[^\n]*--yolo\b|gemini\b[^\n]*--approval-mode[\s=]+["']?(?:yolo|auto_edit))"#,
+            r#"(?:^|[\s;&|(=])(?:claude(?:\s|\\\r?\n)+(?:(?:--\S+|-[A-Za-z])(?:\s|\\\r?\n)+)*-p\b|codex\s+exec\b|aider\b|cursor-agent\b|qwen\b[^\n]*\s-p\b|opencode\s+run\b|goose\s+run\b|gemini\b[^\n]*--yolo\b|gemini\b[^\n]*--approval-mode[\s=]+["']?(?:yolo|auto_edit))"#,
         ),
         family: Family::Gitlab { proof: &PROOF },
         metadata: REPO_MUTATION_HIGH,
@@ -89,6 +89,38 @@ static POSITIVE: &[&str] = &[
         "    - export TITLE=\"$CI_MERGE_REQUEST_TITLE\"\n",
         "    - gemini --yolo --prompt \"Review: $TITLE\"\n",
         "    - 'curl --header \"PRIVATE-TOKEN: $REVIEW_TOKEN\" --data body=done \"$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes\"'\n",
+    ),
+    // Shell line-continuation between `claude` and `-p`: the flags sit on
+    // their own `\`-continued lines, the acceptEdits + Bash(*) grant is an
+    // arbitrary shell, and the MR job has no fork guard.
+    concat!(
+        "gendev:\n",
+        "  rules:\n    - if: '$CI_PIPELINE_SOURCE == \"merge_request_event\"'\n",
+        "  script:\n",
+        "    - npm install -g @anthropic-ai/claude-code\n",
+        "    - git diff origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD > changes.diff\n",
+        "    - |\n",
+        "      claude \\\n",
+        "        -p \"Review the code changes in changes.diff\" \\\n",
+        "        --permission-mode acceptEdits \\\n",
+        "        --allowedTools \"Bash(*) Read(*)\"\n",
+    ),
+    // `$(claude ...)` command substitution: the agent runs inside a
+    // `VAR=$(claude ... )` capture, so the char immediately before `claude` is
+    // `(`, not whitespace. acceptEdits + Bash(*) on MR content, posts back with a
+    // PRIVATE-TOKEN.
+    concat!(
+        "gendev:\n",
+        "  only:\n    - merge_requests\n",
+        "  script:\n",
+        "    - npm install -g @anthropic-ai/claude-code\n",
+        "    - git diff origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD > changes.diff\n",
+        "    - |\n",
+        "      REVIEW_RESULT=$(claude \\\n",
+        "        -p \"Review the code changes in changes.diff\" \\\n",
+        "        --permission-mode acceptEdits \\\n",
+        "        --allowedTools \"Bash(*) Read(*)\")\n",
+        "    - 'curl --header \"PRIVATE-TOKEN: $GITLAB_TOKEN\" --data body=\"$REVIEW_RESULT\" \"$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes\"'\n",
     ),
 ];
 
