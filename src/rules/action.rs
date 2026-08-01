@@ -6,6 +6,33 @@
 
 use super::metadata::{RCE_CRITICAL, REPO_MUTATION_HIGH};
 use super::{Family, Finding, RuleSpec, Severity};
+use std::sync::LazyLock;
+
+/// The model's reply is applied as repository code or pushed: written to a
+/// source file, `git apply`/`git commit`/`git push`-ed, or opened as a PR via a
+/// commit action. A summarizer that only posts the reply as an issue/PR comment,
+/// sets a label, or PATCHes a Release body matches none of these, so it stays
+/// silent even when the job holds `contents: write`.
+static AI_INFERENCE_APPLY: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)git\s+apply\b|git\s+(?:-c\s+\S+\s+)?commit\b|git\s+push\b|create-pull-request|peter-evans/create-pull-request|stefanzweifel/git-auto-commit|EndBug/add-and-commit|gh\s+pr\s+create\b|>\s*[^\n]*\.(?:patch|diff|py|js|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|rb|php|sh|bash|yml|yaml|json|toml|md)\b"#,
+    )
+    .unwrap()
+});
+
+/// Untrusted input can reach the model: either attacker-controlled event text
+/// is interpolated somewhere in the file (issue/PR/comment/review body or
+/// title), or the job checks out a fork-controlled ref so the model operates on
+/// attacker-supplied code (the `workflow_run` self-healing shape reads the
+/// failed run's `head_branch`/`head_sha`, and a fork PR head checkout is the
+/// same). A trusted-input release-notes generator (commits, tags, changelog)
+/// matches none of these.
+static AI_INFERENCE_UNTRUSTED: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)github\.event\.(?:issue|comment|pull_request|review)\.(?:body|title)|github\.event\.pull_request\.head\.(?:ref|label|sha)|github\.event\.issue\.user\.login|github\.event\.comment\.user|github\.event\.workflow_run\.head_(?:branch|sha)|refs/pull/[^/\s]+/(?:head|merge)"#,
+    )
+    .unwrap()
+});
 
 const REC_EXEC: &str = "Do not open an AI agent to fork contributors (allowed_non_write_users / allowed_bots \"*\") while granting shell or file-write tools in a job that can write to the repository. Gate the job on repository write access (author_association in OWNER/MEMBER/COLLABORATOR or getCollaboratorPermissionLevel), run the agent read-only, and hand its output to a separate reviewed job for any commit. Treat the PR diff and any in-tree agent policy files as untrusted data.";
 
@@ -29,9 +56,41 @@ fn action(
         severity,
         title,
         anchor: crate::rules::compile_anchor(anchor),
-        family: Family::Action,
+        family: Family::Action {
+            apply_proof: None,
+            untrusted_input_proof: None,
+        },
         metadata,
         recommendation,
+        positive_examples,
+        negative_examples,
+    }
+}
+
+/// Like [`action`], but for a *neutral* action whose slug is not enough on its
+/// own (see [`Family::Action`]). Both whole-file proofs must also match before
+/// the finding fires.
+#[allow(clippy::too_many_arguments)]
+fn neutral_action(
+    id: &'static str,
+    title: &'static str,
+    anchor: &str,
+    apply_proof: &'static LazyLock<regex::Regex>,
+    untrusted_input_proof: &'static LazyLock<regex::Regex>,
+    positive_examples: &'static [&'static str],
+    negative_examples: &'static [&'static str],
+) -> RuleSpec {
+    RuleSpec {
+        id,
+        severity: Severity::Critical,
+        title,
+        anchor: crate::rules::compile_anchor(anchor),
+        family: Family::Action {
+            apply_proof: Some(apply_proof),
+            untrusted_input_proof: Some(untrusted_input_proof),
+        },
+        metadata: RCE_CRITICAL,
+        recommendation: REC_EXEC,
         positive_examples,
         negative_examples,
     }
@@ -53,6 +112,10 @@ pub fn rules() -> Vec<RuleSpec> {
         iflow(),
         sweep(),
         pr_agent(),
+        skyramp(),
+        codescene_refactor(),
+        tend(),
+        ai_inference(),
     ]
 }
 
@@ -625,7 +688,219 @@ fn pr_agent() -> RuleSpec {
     )
 }
 
-/// Drop the HIGH `repo_mutating_gh_tools` finding when the CRITICAL
+/// Skyramp Testbot (`skyramp/testbot`) is an Anthropic-backed test-generation
+/// agent that checks out the repo and, with `autoCommit: 'true'`, commits and
+/// pushes generated tests using a GitHub App token. It has no author-permission
+/// check of its own: deployments gate only on the comment body mentioning
+/// `@skyramp-testbot`, which any outside commenter can type, so on a
+/// secret-bearing fork-reachable trigger (`issue_comment`) with repo write an
+/// untrusted actor drives a push. Anchor on the action use; the standard
+/// fork+write+author-gate post-filter suppresses callers that add a real
+/// `author_association` / collaborator-permission gate.
+fn skyramp() -> RuleSpec {
+    action(
+        "fork_triggerable_skyramp_testbot_with_repo_write",
+        Severity::Critical,
+        "Fork-triggerable Skyramp Testbot agent with repository write access in a privileged CI job",
+        r#"(?m)skyramp/testbot@"#,
+        RCE_CRITICAL,
+        REC_EXEC,
+        &[concat!(
+            "on:\n  issue_comment:\n    types: [created]\n",
+            "jobs:\n  testbot:\n",
+            "    if: contains(github.event.comment.body, '@skyramp-testbot')\n",
+            "    permissions:\n      contents: write\n      pull-requests: write\n",
+            "    steps:\n      - uses: actions/checkout@v6\n",
+            "      - uses: skyramp/testbot@v0.10.0\n        with:\n",
+            "          anthropicApiKey: ${{ secrets.SKYRAMP_TESTBOT_API_KEY }}\n",
+            "          githubToken: ${{ secrets.GITHUB_TOKEN }}\n",
+            "          autoCommit: 'true'\n"
+        )],
+        &[concat!(
+            "on:\n  issue_comment:\n    types: [created]\n",
+            "jobs:\n  testbot:\n",
+            "    if: contains(fromJSON('[\"OWNER\", \"MEMBER\", \"COLLABORATOR\"]'), github.event.comment.author_association)\n",
+            "    permissions:\n      contents: write\n",
+            "    steps:\n      - uses: skyramp/testbot@v0.10.0\n        with:\n",
+            "          anthropicApiKey: ${{ secrets.SKYRAMP_TESTBOT_API_KEY }}\n",
+            "          autoCommit: 'true'\n"
+        )],
+    )
+}
+
+/// CodeScene refactoring agent (`codescene-oss/pr-refactoring-agent`) reads a
+/// PR, refactors the code with an LLM, and commits the result back. It has no
+/// author-permission check of its own: the observed deployments gate only on a
+/// `/cs-agent` mention in a PR comment, which any outside commenter can type, so
+/// on the fork-reachable `issue_comment` trigger with `contents: write` an
+/// untrusted actor drives a push. Anchor on the action use; the standard
+/// fork+write+author-gate post-filter suppresses callers that add a real
+/// `author_association` / collaborator-permission gate.
+fn codescene_refactor() -> RuleSpec {
+    action(
+        "fork_triggerable_codescene_refactor_agent_with_repo_write",
+        Severity::Critical,
+        "Fork-triggerable CodeScene refactoring agent with repository write access in a privileged CI job",
+        r#"(?m)codescene-oss/pr-refactoring-agent@"#,
+        RCE_CRITICAL,
+        REC_EXEC,
+        &[concat!(
+            "on:\n  issue_comment:\n    types: [created]\n",
+            "jobs:\n  refactor:\n",
+            "    if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/cs-agent')\n",
+            "    permissions:\n      contents: write\n      pull-requests: write\n",
+            "    steps:\n      - uses: actions/checkout@v4\n",
+            "      - uses: codescene-oss/pr-refactoring-agent@bbc72fb\n        env:\n",
+            "          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}\n"
+        )],
+        &[concat!(
+            "on:\n  issue_comment:\n    types: [created]\n",
+            "jobs:\n  refactor:\n",
+            "    if: contains(fromJSON('[\"OWNER\", \"MEMBER\", \"COLLABORATOR\"]'), github.event.comment.author_association)\n",
+            "    permissions:\n      contents: write\n",
+            "    steps:\n      - uses: codescene-oss/pr-refactoring-agent@bbc72fb\n"
+        )],
+    )
+}
+
+/// Tend (`max-sixty/tend/claude`, and the PTY variant `.../claude-interactive`)
+/// is "an autonomous junior maintainer" that runs the `claude` binary headless
+/// with `defaultMode: bypassPermissions` + `skipDangerousModePermissionPrompt`
+/// and a default tool grant of `Bash,Edit,Write,...` - an autonomous shell and
+/// file writer that pushes commits with the supplied `github_token`. It has no
+/// author-permission check of its own. The auto-review flavor deploys on
+/// `pull_request_target`, which checks out and runs the untrusted fork PR head
+/// with repo-write secrets in scope and no gate, so an outside contributor
+/// drives an autonomous write. Anchor on the action use; the standard
+/// fork+write+author-gate post-filter suppresses the sibling `tend-*` workflows
+/// that add a real `author_association` / collaborator-permission gate.
+fn tend() -> RuleSpec {
+    action(
+        "fork_triggerable_tend_agent_with_repo_write",
+        Severity::Critical,
+        "Fork-triggerable Tend autonomous maintainer agent with repository write access in a privileged CI job",
+        r#"(?m)max-sixty/tend/claude(-interactive)?@"#,
+        RCE_CRITICAL,
+        REC_EXEC,
+        &[concat!(
+            "on:\n  pull_request_target:\n    types: [opened, synchronize]\n",
+            "jobs:\n  review:\n",
+            "    permissions:\n      contents: write\n      pull-requests: write\n",
+            "    steps:\n      - uses: actions/checkout@v7\n        with:\n",
+            "          ref: refs/pull/${{ github.event.pull_request.number }}/head\n",
+            "          allow-unsafe-pr-checkout: true\n",
+            "      - uses: max-sixty/tend/claude@0.1.12\n        with:\n",
+            "          github_token: ${{ secrets.TEND_BOT_TOKEN }}\n",
+            "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+            "          prompt: ${{ github.event.pull_request.title }}\n"
+        )],
+        &[concat!(
+            "on:\n  issue_comment:\n    types: [created]\n",
+            "jobs:\n  mention:\n",
+            "    if: contains(fromJSON('[\"OWNER\", \"MEMBER\", \"COLLABORATOR\"]'), github.event.comment.author_association)\n",
+            "    permissions:\n      contents: write\n",
+            "    steps:\n      - uses: max-sixty/tend/claude@0.1.12\n        with:\n",
+            "          github_token: ${{ secrets.TEND_BOT_TOKEN }}\n"
+        )],
+    )
+}
+
+/// GitHub's first-party inference action (`actions/ai-inference`, GitHub Models)
+/// only returns model text - it holds no tools and pushes nothing itself. The
+/// exposure is the workflow around it: the observed deployments feed untrusted
+/// event text (`github.event.issue.title/body`, the PR body, a comment) into
+/// the `prompt`, then treat the model's reply as code - writing the returned
+/// unified diff to disk and `git apply`-ing it, or committing the response -
+/// and push it back with `contents: write`. The action carries no
+/// author-permission check, and because it authenticates with the built-in
+/// `models: read` permission plus `GITHUB_TOKEN` there is no provider secret to
+/// grep, so it hides from every provider-key / named-CLI signal.
+///
+/// Because the action is neutral, the anchor alone over-fires: a large share of
+/// deployments hold `contents: write` yet only post the reply as a comment, set
+/// a label, or PATCH a Release body, and some are trusted-input release-notes
+/// generators. So this rule carries two whole-file proofs on top of the
+/// fork+write+ungated post-filter: the reply is applied as repo code / pushed
+/// ([`AI_INFERENCE_APPLY`]) and untrusted input reaches the model
+/// ([`AI_INFERENCE_UNTRUSTED`]). It fires only when the anchor, both proofs, and
+/// the reachability/write/gate filter all hold.
+fn ai_inference() -> RuleSpec {
+    neutral_action(
+        "fork_triggerable_ai_inference_agent_with_repo_write",
+        "Fork-triggerable GitHub Models (actions/ai-inference) agent writing model output to the repo in a privileged CI job",
+        r#"(?m)^\s*uses\s*:\s*actions/ai-inference@"#,
+        &AI_INFERENCE_APPLY,
+        &AI_INFERENCE_UNTRUSTED,
+        &[
+            // Untrusted issue text -> model -> unified diff written to disk,
+            // git apply + commit + push. The exploit shape: both proofs match.
+            concat!(
+                "on:\n  issues:\n    types: [opened, labeled]\n",
+                "jobs:\n  fix:\n",
+                "    permissions:\n      contents: write\n      issues: write\n      models: read\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - id: implement\n        uses: actions/ai-inference@v1\n        with:\n",
+                "          prompt: |\n            Return a unified diff that fixes this issue.\n",
+                "            Title: ${{ github.event.issue.title }}\n",
+                "            Body: ${{ github.event.issue.body }}\n",
+                "      - name: Apply and push\n        run: |\n",
+                "          printf '%s' \"${{ steps.implement.outputs.response }}\" > fix.patch\n",
+                "          git apply fix.patch\n",
+                "          git commit -am 'ai fix'\n          git push\n"
+            ),
+            // workflow_run self-healing: untrusted PR head branch fed in, reply
+            // committed back. Fork-reachable via workflow_run escalation.
+            concat!(
+                "on:\n  workflow_run:\n    workflows: [\"CI\"]\n    types: [completed]\n",
+                "jobs:\n  heal:\n    permissions:\n      contents: write\n      models: read\n",
+                "    steps:\n      - uses: actions/checkout@v4\n        with:\n",
+                "          ref: ${{ github.event.workflow_run.head_branch }}\n",
+                "      - id: ai\n        uses: actions/ai-inference@v1\n        with:\n",
+                "          prompt: \"Fix the failure in PR ${{ github.event.pull_request.body }}\"\n",
+                "      - run: |\n          echo \"${{ steps.ai.outputs.response }}\" > patch.py\n",
+                "          git commit -am heal && git push\n"
+            ),
+        ],
+        &[
+            // Read-only summarizer: untrusted body in, but the reply is only
+            // posted as a comment. No apply/push -> AI_INFERENCE_APPLY fails.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  summarize:\n",
+                "    permissions:\n      contents: write\n      issues: write\n      models: read\n",
+                "    steps:\n      - id: ai\n        uses: actions/ai-inference@v2\n        with:\n",
+                "          prompt: |\n            Summarize: ${{ github.event.issue.body }}\n",
+                "      - uses: peter-evans/create-or-update-comment@v4\n        with:\n",
+                "          issue-number: ${{ github.event.issue.number }}\n",
+                "          body: ${{ steps.ai.outputs.response }}\n"
+            ),
+            // Trusted-input release-notes generator: PATCHes a Release body, but
+            // no untrusted event text reaches the model, so AI_INFERENCE_UNTRUSTED
+            // fails. (Also workflow_run + tag-gated.)
+            concat!(
+                "on:\n  workflow_run:\n    workflows: [\"Release\"]\n    types: [completed]\n",
+                "jobs:\n  notes:\n    if: startsWith(github.event.workflow_run.head_branch, 'v')\n",
+                "    permissions:\n      contents: write\n      models: read\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - id: gen\n        uses: actions/ai-inference@v2\n        with:\n",
+                "          prompt-file: .github/prompts/release-notes.prompt.yml\n",
+                "          file_input: |\n            commits: ./commits.txt\n",
+                "      - run: gh api --method PATCH /repos/${{ github.repository }}/releases/1 --field body=\"$NOTES\"\n"
+            ),
+            // Untrusted input + apply, but the job is not fork-reachable (push to
+            // main only): the reachability filter suppresses regardless of proofs.
+            concat!(
+                "on:\n  push:\n    branches: [main]\n",
+                "jobs:\n  fix:\n    permissions:\n      contents: write\n      models: read\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - id: ai\n        uses: actions/ai-inference@v1\n        with:\n",
+                "          prompt: \"${{ github.event.issue.body }}\"\n",
+                "      - run: |\n          echo \"${{ steps.ai.outputs.response }}\" > out.py\n",
+                "          git commit -am x && git push\n"
+            ),
+        ],
+    )
+}
 /// `write_or_exec_tools` finding fires on the *same line*: both anchor on the
 /// same `allowed_non_write_users: "*"` step, and when the tool grant on that
 /// line is an arbitrary shell/write primitive the CRITICAL rule is the precise

@@ -60,7 +60,21 @@ pub enum Family {
     /// "*"`, a write sandbox, etc.). Survives only when the workflow is
     /// fork-reachable, ungated, and the enclosing job can write. Mirrors
     /// `_suppress_fork_triggerable_ai_when_not_reachable`.
-    Action,
+    ///
+    /// The two proofs are normally `None`: for a *named* agent the `uses:` slug
+    /// alone is the signature, so fork-reachable + write + ungated is sufficient.
+    /// They are `Some` only for a *neutral* action whose danger lives in the
+    /// surrounding dataflow rather than the action itself (`actions/ai-inference`,
+    /// which just returns model text). There both must match the whole file: the
+    /// model's reply is applied as repository code / pushed (`apply_proof`) and
+    /// untrusted event text feeds the model (`untrusted_input_proof`). The common
+    /// read-only summarizer (reply posted as a comment, a label, or a Release
+    /// body; or a trusted-input release-notes generator) then stays silent even
+    /// though the job happens to hold `contents: write`.
+    Action {
+        apply_proof: Option<&'static LazyLock<regex::Regex>>,
+        untrusted_input_proof: Option<&'static LazyLock<regex::Regex>>,
+    },
     /// A `.gitlab-ci.yml` agent job. GitLab's fork-pipeline model differs from
     /// GitHub Actions, so reachability, gating, and write capability are decided
     /// by the GitLab-native check in [`crate::workflow`] rather than the GitHub
@@ -462,7 +476,7 @@ impl RuleSpec {
             Family::Installed { proof, .. } => {
                 proof.is_match(body) && !self.anchor_lines(body, &starts).is_empty()
             }
-            Family::Action => !self.anchor_lines(body, &starts).is_empty(),
+            Family::Action { .. } => !self.anchor_lines(body, &starts).is_empty(),
             Family::Gitlab { .. } => false,
             // Shell-exec risk is judged from the caller job's env/secret context,
             // not a composite action body, so it does not resolve here.
@@ -507,8 +521,20 @@ impl RuleSpec {
                     return Vec::new();
                 }
             }
-            Family::Action => {
+            Family::Action {
+                apply_proof,
+                untrusted_input_proof,
+            } => {
                 if !ctx.reachable || (ctx.gated && !ctx.review_bypass) {
+                    return Vec::new();
+                }
+                // ai-inference is neutral, so its two proofs must also hold: the
+                // reply is applied as repo code and untrusted input reaches the
+                // model. See the Family::Action doc for why.
+                let missing_proof = |proof: Option<&'static LazyLock<regex::Regex>>| {
+                    proof.is_some_and(|p| !p.is_match(content))
+                };
+                if missing_proof(apply_proof) || missing_proof(untrusted_input_proof) {
                     return Vec::new();
                 }
             }

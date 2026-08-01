@@ -97,7 +97,7 @@ proof!(
 // `--yolo` is unambiguously driving an agent, not mentioning one in prose.
 proof!(
     SHELL_EXEC_AGENT,
-    r#"(?i)@anthropic-ai/claude-code|ANTHROPIC_API_?KEY|CLAUDE_CODE|(?:^|[^\w-])claude-code\b|\.claude/|CLAUDE\.md|@google/gemini-cli|gemini-cli|GEMINI_API_?KEY|GOOGLE_API_?KEY|cursor\.com/install|CURSOR_API_?KEY|@cursor/sdk|sst/opencode|opencode\s+run|OPENCODE_API|aider-chat|(?:^|[^\w-])aider\b|CODEX_API_?KEY|OPENAI_API_?KEY|--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\b|--allowed-?tools[\s=]+['"][^'"]*\b(?:Bash|Edit|Write|MultiEdit)\b"#
+    r#"(?i)@anthropic-ai/claude-code|ANTHROPIC_API_?KEY|CLAUDE_CODE|(?:^|[^\w-])claude-code\b|\.claude/|CLAUDE\.md|@google/gemini-cli|gemini-cli|GEMINI_API_?KEY|GOOGLE_API_?KEY|cursor\.com/install|CURSOR_API_?KEY|@cursor/sdk|(?:sst|anomalyco)/opencode|opencode\s+run|OPENCODE_API|use_github_token\s*:\s*true|aider-chat|(?:^|[^\w-])aider\b|CODEX_API_?KEY|OPENAI_API_?KEY|(?:DEEPSEEK|ZHIPU|DASHSCOPE|MOONSHOT|QWEN|GROQ|MISTRAL|OPENROUTER|TOGETHER|XAI|PERPLEXITY|COHERE|FIREWORKS|CEREBRAS)_API_?KEY|--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\b|--allowed-?tools[\s=]+['"][^'"]*\b(?:Bash|Edit|Write|MultiEdit)\b"#
 );
 
 /// Shared recommendation for the installed-agent family.
@@ -681,15 +681,36 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
         r#"anthropics/claude-code-(?:base-)?action@(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){{0,4000}}?(?:(?<!dis)allowed[_-]?[Tt]ools[\s=:]+(?:(?!disallowedTools|(?:direct_|system_|user_)?prompt\s*:)[\s\S]){{0,400}}?{danger}|claude_args\s*:(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){{0,400}}?(?:--dangerously-skip-permissions|--permission-mode[\s=]+['"]?(?:bypassPermissions|acceptEdits|auto)\b|--allowed-?tools[\s=]+['"][^'"]*?{danger}))"#,
         danger = danger_tool
     );
+    // OpenCode action shape: the `sst|anomalyco/opencode/github@` action runs the
+    // full agent (a shell) on the comment/PR it is triggered by. Its built-in
+    // author check (assertPermissions in github/index.ts) requires the commenter
+    // to have admin/write, but that check is skipped entirely when the workflow
+    // passes a GitHub token (`use_github_token: true`). So the token form on a
+    // fork-reachable trigger hands the agent shell to any commenter/PR author.
+    // Matching `use_github_token: true` is what distinguishes it from the safe
+    // App-gated form; the ForkShellExec post-filter still demands a secret, a
+    // fork trigger, and the absence of an author gate.
+    let opencode_action = r#"(?:sst|anomalyco)/opencode/github@(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){0,2000}?use_github_token\s*:\s*true"#;
+    // OpenCode CLI shape with an env-var permission grant: `opencode run` reads
+    // its tool policy from an `OPENCODE_PERMISSION` JSON blob in the step env
+    // rather than a CLI flag, so the `--allowedTools`/`--dangerously-*` flag
+    // branch above never sees it. When that blob allows `bash` (`"bash":
+    // "allow"` or a `"bash": { ... }` object with any `allow`) the agent has an
+    // arbitrary shell. Anchor on the `OPENCODE_PERMISSION` bash-allow blob; the
+    // ForkShellExec post-filter still demands `opencode run` reachability via a
+    // secret-bearing fork trigger, no author gate, and no provable repo write.
+    let opencode_permission = r#"OPENCODE_PERMISSION(?:(?!^\s*-?\s*(?:uses|name)\s*:)[\s\S]){0,600}?["']bash["']\s*:\s*(?:["']allow["']|\{(?:(?!\})[\s\S]){0,400}?["']allow["'])"#;
     // Fire on either shape. The tool name and flag may sit on one line or span a
     // `\`-continued invocation, over the same window the per-vendor CRITICAL
     // anchors use. This is their repo-write-less complement: the ForkShellExec
     // post-filter demands a secret and the *absence* of provable write, so a
     // write-capable job is owned by the CRITICAL rule and never double-reported.
     let anchor = format!(
-        r#"(?im)(?:(?<![\w./-])(?:claude|gemini|cursor-agent|opencode|aider|codex)(?![\w./-])[ \t]+(?:(?:exec|run)[ \t]+)?(?:{flag}|["'$\\-](?:[^\n]|\\\r?\n){{0,600}}?{flag})|{action})"#,
+        r#"(?im)(?:(?<![\w./-])(?:claude|gemini|cursor-agent|opencode|aider|codex)(?![\w./-])[ \t]+(?:(?:exec|run)[ \t]+)?(?:{flag}|["'$\\-](?:[^\n]|\\\r?\n){{0,600}}?{flag})|{action}|{opencode}|{opencode_perm})"#,
         flag = shell_flag,
-        action = action_grant
+        action = action_grant,
+        opencode = opencode_action,
+        opencode_perm = opencode_permission
     );
     RuleSpec {
         id: "fork_triggerable_agent_shell_exec_secret_exposure",
@@ -750,6 +771,37 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
                 "    steps:\n      - env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n",
                 "        run: claude -p \"$PROMPT\" --allowedTools \"Bash(gh:*)\"\n"
             ),
+            // OpenCode action form: the bare opencode/github action runs the agent
+            // shell on a fork-reachable comment/PR, with a provider key in env and
+            // use_github_token: true, which makes opencode skip its own author
+            // check. No repo write, no workflow author gate, so any commenter or
+            // fork PR author reaches the shell and can exfiltrate the key.
+            concat!(
+                "on:\n  pull_request:\n    types: [opened, synchronize]\n  issue_comment:\n    types: [created]\n",
+                "jobs:\n  opencode:\n    runs-on: ubuntu-latest\n",
+                "    permissions:\n      contents: read\n      pull-requests: write\n",
+                "    steps:\n      - uses: actions/checkout@v6\n",
+                "      - uses: anomalyco/opencode/github@latest\n",
+                "        env:\n          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n",
+                "        with:\n          model: deepseek/deepseek-v4-pro\n          use_github_token: true\n"
+            ),
+            // OpenCode CLI form with an env-var permission grant: `opencode run`
+            // on issue text, tool policy in an
+            // OPENCODE_PERMISSION blob that allows `bash`, a provider key + token
+            // in env, no write scope and no author gate. Any issue opener drives
+            // the shell and can exfiltrate the key. The CLI-flag branch misses it
+            // because the grant is an env var, not a flag.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "permissions:\n  contents: read\n",
+                "jobs:\n  assist:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - env:\n          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}\n",
+                "          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n",
+                "          OPENCODE_PERMISSION: |\n",
+                "            { \"bash\": { \"gh*\": \"allow\", \"git*\": \"allow\" }, \"webfetch\": \"deny\" }\n",
+                "        run: |\n          opencode run \"${{ github.event.issue.body }}\"\n"
+            ),
         ],
         negative_examples: &[
             // Write-capable job: this is the CRITICAL repo-write rule's job, so
@@ -774,6 +826,30 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
                 "jobs:\n  review:\n    runs-on: ubuntu-latest\n",
                 "    steps:\n      - uses: actions/checkout@v4\n",
                 "      - run: claude -p \"$(cat prompt.txt)\" --allowedTools \"Bash,Read\"\n"
+            ),
+            // OpenCode action WITHOUT a github token: opencode's built-in
+            // assertPermissions runs and requires the commenter to have
+            // admin/write on the repo, so a fork contributor cannot trigger it.
+            // This is the common, safe deployment and must stay silent.
+            concat!(
+                "on:\n  issue_comment:\n    types: [created]\n",
+                "jobs:\n  opencode:\n    if: contains(github.event.comment.body, '/opencode')\n",
+                "    runs-on: ubuntu-latest\n    permissions:\n      id-token: write\n",
+                "    steps:\n      - uses: actions/checkout@v6\n",
+                "      - uses: sst/opencode/github@latest\n",
+                "        env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n",
+                "        with:\n          model: anthropic/claude-sonnet-4-6\n"
+            ),
+            // OpenCode action with a token but an explicit workflow author gate:
+            // the commenter login is checked, so untrusted users are excluded.
+            concat!(
+                "on:\n  issue_comment:\n    types: [created]\n",
+                "jobs:\n  opencode:\n    if: github.event.comment.user.login == 'maintainer'\n",
+                "    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n",
+                "    steps:\n      - uses: actions/checkout@v6\n",
+                "      - uses: anomalyco/opencode/github@latest\n",
+                "        env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n",
+                "        with:\n          use_github_token: true\n"
             ),
             // Read-only tool grant: no Bash/Edit/Write and no autonomous flag, so
             // the agent cannot run a shell even with a key present.
@@ -834,6 +910,17 @@ fn agent_shell_exec_secret_exposure() -> RuleSpec {
                 "          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}\n",
                 "          allowed_tools: \"Bash,Read,Write,Edit\"\n"
             ),
+            // OpenCode CLI form whose OPENCODE_PERMISSION blob denies bash: the
+            // agent has no shell, so even with a key present there is nothing to
+            // exfiltrate via command execution. Must stay silent.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  assist:\n    runs-on: ubuntu-latest\n",
+                "    steps:\n      - env:\n          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}\n",
+                "          OPENCODE_PERMISSION: |\n",
+                "            { \"bash\": \"deny\", \"edit\": \"deny\", \"webfetch\": \"deny\" }\n",
+                "        run: |\n          opencode run \"${{ github.event.issue.body }}\"\n"
+            ),
         ],
     }
 }
@@ -842,29 +929,56 @@ fn bespoke_llm_agent() -> RuleSpec {
     installed(
         "fork_triggerable_bespoke_llm_agent_with_repo_write",
         "Fork-triggerable bespoke LLM agent with repository write access in a privileged CI job",
-        // The anchor is the bespoke LLM endpoint the workflow talks to: a
-        // chat-completions / messages URL, whether it appears in a `curl` line or
-        // as a provider base-URL env value that a local script then POSTs to.
-        // Naming the API shape (not a vendor) is what lets an unnamed, roll-your-own
-        // agent match. The proof ([`BESPOKE_LLM`]) demands untrusted trigger payload
-        // in the file, and the installed-agent post-filter demands the job be
-        // fork-reachable, ungated, and write-capable - so a self-prompted call, or
-        // one in a read-only review job, never matches.
-        r"(?i)(?:/v1/chat/completions|/v1/messages|/v1/completions|/chat/completions|api\.openai\.com/v1|api\.anthropic\.com/v1|generativelanguage\.googleapis\.com|/compatible-mode/v1|/api/paas/v4)",
+        // The anchor is the bespoke LLM call the workflow makes, in either of the
+        // two shapes a roll-your-own agent uses. First, the raw HTTP endpoint - a
+        // chat-completions / messages URL in a `curl` line or a provider base-URL
+        // env value a local script POSTs to. Second, the provider SDK call itself
+        // (`new OpenAI(...)`, `genai.GenerativeModel`, `anthropic.messages.create`,
+        // `.chat.completions.create`, `.generateContent`), which an inline
+        // `actions/github-script` or `python -c` step makes with no URL literal;
+        // the URL-only anchor missed those. Naming the API shape (not a vendor) is
+        // what lets an unnamed agent match. The proof ([`BESPOKE_LLM`]) still
+        // demands untrusted trigger payload in the file, and the installed-agent
+        // post-filter still demands the job be fork-reachable, ungated, and
+        // write-capable - so a self-prompted call, or one in a read-only review
+        // job, never matches. An SDK import with no call, or a call whose prompt is
+        // trusted repo text, cannot satisfy both the anchor and the proof.
+        r#"(?i)(?:/v1/chat/completions|/v1/messages|/v1/completions|/chat/completions|api\.openai\.com/v1|api\.anthropic\.com/v1|generativelanguage\.googleapis\.com|/compatible-mode/v1|/api/paas/v4|new OpenAI\(|genai\.configure\(|genai\.GenerativeModel\(|\.getGenerativeModel\(|\.generateContent\(|\.generate_content\(|\.chat\.completions\.create\(|\.messages\.create\(|@anthropic-ai/sdk|@google/generative-ai)"#,
         &BESPOKE_LLM,
         false,
-        &[concat!(
-            "on:\n  issues:\n    types: [opened]\n",
-            "jobs:\n  agent:\n    permissions:\n      contents: write\n",
-            "    steps:\n      - uses: actions/checkout@v4\n",
-            "      - env:\n          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}\n          TASK: ${{ github.event.issue.body }}\n",
-            "        run: |\n",
-            "          RESP=$(curl -s https://api.openai.com/v1/chat/completions \\\n",
-            "            -H \"Authorization: Bearer $LLM_API_KEY\" \\\n",
-            "            -d \"{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"$TASK\\\"}]}\")\n",
-            "          echo \"$RESP\" | node apply-ops.js\n",
-            "          git add . && git commit -m fix && git push origin HEAD\n"
-        )],
+        &[
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  agent:\n    permissions:\n      contents: write\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - env:\n          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}\n          TASK: ${{ github.event.issue.body }}\n",
+                "        run: |\n",
+                "          RESP=$(curl -s https://api.openai.com/v1/chat/completions \\\n",
+                "            -H \"Authorization: Bearer $LLM_API_KEY\" \\\n",
+                "            -d \"{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"$TASK\\\"}]}\")\n",
+                "          echo \"$RESP\" | node apply-ops.js\n",
+                "          git add . && git commit -m fix && git push origin HEAD\n"
+            ),
+            // SDK shape: no URL literal at all. An inline python step configures the
+            // Gemini SDK and feeds the untrusted issue body into generate_content,
+            // then pushes the model's output. The URL-only anchor missed this; the
+            // SDK-call anchor matches genai.configure / .generate_content.
+            concat!(
+                "on:\n  issues:\n    types: [opened]\n",
+                "jobs:\n  coder:\n    permissions:\n      contents: write\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - env:\n          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}\n          ISSUE_BODY: ${{ github.event.issue.body }}\n",
+                "        run: |\n",
+                "          python - <<'PY'\n",
+                "          import os, google.generativeai as genai\n",
+                "          genai.configure(api_key=os.environ['GEMINI_API_KEY'])\n",
+                "          m = genai.GenerativeModel('gemini-1.5-flash')\n",
+                "          code = m.generate_content(os.environ['ISSUE_BODY']).text\n",
+                "          open('out.py','w').write(code)\n",
+                "          PY\n",
+                "          git add . && git commit -m auto && git push origin HEAD\n"
+            ),
+        ],
         &[
             // Read-only: curls a completions endpoint to post a review comment on a
             // PR, but the job has no write scope and never pushes - not the class.
@@ -885,6 +999,24 @@ fn bespoke_llm_agent() -> RuleSpec {
                 "    steps:\n      - run: |\n",
                 "          curl -s https://api.openai.com/v1/chat/completions -d @changelog.json > notes.md\n",
                 "          git add notes.md && git commit -m notes && git push\n"
+            ),
+            // SDK present but self-prompted: an inline step calls the OpenAI SDK on
+            // trusted repo files (a diff of the merged commit) to write release
+            // notes. The SDK-call anchor matches, but no untrusted github.event
+            // body/title is in the file, so the BESPOKE_LLM proof fails - silent.
+            concat!(
+                "on:\n  push:\n    branches: [main]\n",
+                "jobs:\n  notes:\n    permissions:\n      contents: write\n",
+                "    steps:\n      - uses: actions/checkout@v4\n",
+                "      - env:\n          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n",
+                "        run: |\n",
+                "          python - <<'PY'\n",
+                "          from openai import OpenAI\n",
+                "          diff = open('CHANGELOG.diff').read()\n",
+                "          r = OpenAI().chat.completions.create(model='gpt-4o', messages=[{'role':'user','content':diff}])\n",
+                "          open('NOTES.md','w').write(r.choices[0].message.content)\n",
+                "          PY\n",
+                "          git add NOTES.md && git commit -m notes && git push\n"
             ),
             // Author-gated: the write job that runs the bespoke agent is gated on
             // repository ownership, so a fork contributor cannot reach it.

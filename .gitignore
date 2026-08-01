@@ -16,6 +16,9 @@
 __pycache__/
 *.pyc
 
+# macOS Finder metadata
+.DS_Store
+
 # Local-only corpus-hunting scripts + the repo trees they fetch. These query
 # GitHub/GitLab for live fork-triggerable agent workflows to validate grackle
 # against real repos. Kept out of the repo: they fetch third-party code and
