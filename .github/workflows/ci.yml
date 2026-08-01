@@ -59,6 +59,16 @@ jobs:
       - name: Self-test rule set
         run: cargo run --release --locked -- --self-test
 
+      - name: Check README/landing rule counts are in sync
+        env:
+          GRACKLE_BIN: ${{ github.workspace }}/target/release/grackle
+        run: |
+          python3 .hugo/scripts/regen_readme_counts.py || true
+          if ! git diff --exit-code README.md docs/index.md; then
+            echo "::error::README.md/docs/index.md rule counts are stale. Run the readme-rule-counts pre-commit hook (or python3 .hugo/scripts/regen_readme_counts.py) and commit."
+            exit 1
+          fi
+
   snap:
     name: Build snap (dry run)
     runs-on: ubuntu-latest

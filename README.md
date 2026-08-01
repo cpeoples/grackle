@@ -11,7 +11,7 @@
   <a href="https://scorecard.dev/viewer/?uri=github.com/cpeoples/grackle"><img src="https://img.shields.io/ossf-scorecard/github.com/cpeoples/grackle?style=flat-square&label=OpenSSF%20Scorecard" alt="OpenSSF Scorecard" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/security/code-scanning"><img src="https://img.shields.io/github/actions/workflow/status/cpeoples/grackle/codeql.yml?branch=main&label=CodeQL&style=flat-square&logo=github&logoColor=white" alt="CodeQL" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/actions/workflows/cargo-audit.yml"><img src="https://img.shields.io/github/actions/workflow/status/cpeoples/grackle/cargo-audit.yml?branch=main&label=cargo-audit&style=flat-square&logo=rust&logoColor=white" alt="cargo-audit" /></a>&nbsp;&nbsp;
-  <a href="src/rules"><img src="https://img.shields.io/badge/Rules-36-blue?style=flat-square&logo=rust&logoColor=white" alt="Rules" /></a>&nbsp;&nbsp;
+  <a href="src/rules"><img src="https://img.shields.io/badge/Rules-40-blue?style=flat-square&logo=rust&logoColor=white" alt="Rules" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SLSA-Level%203-success?style=flat-square&logo=slsa&logoColor=white" alt="SLSA Build Level 3" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/SBOM-CycloneDX-success?style=flat-square&logo=cyclonedx&logoColor=white" alt="CycloneDX SBOM" /></a>&nbsp;&nbsp;
   <a href="https://github.com/cpeoples/grackle/releases/latest"><img src="https://img.shields.io/badge/Sigstore-verified-success?style=flat-square&logo=sigstore&logoColor=white" alt="Sigstore verified" /></a>&nbsp;&nbsp;

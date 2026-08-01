@@ -6,7 +6,7 @@ When an outside contributor can reach a job that runs a coding agent on
 untrusted input while that job can write to the repository, prompt injection
 turns into remote code execution and repository takeover under the CI token.
 
-**<!--RULES-->36<!--/RULES--> rules** across <!--FAMILIES-->35<!--/FAMILIES--> agent families, on
+**<!--RULES-->40<!--/RULES--> rules** across <!--FAMILIES-->39<!--/FAMILIES--> agent families, on
 both GitHub Actions and GitLab CI. Every finding carries control-framework
 metadata (CWE, OWASP, MITRE ATT&CK and ATLAS, NIST, CIS, PCI-DSS, SOC 2) and a
 dynamic secure-fix write-up.
