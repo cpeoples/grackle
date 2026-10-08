@@ -17,6 +17,12 @@ workflows, or inspect repository settings.
   whether a branch is protected, or whether a GitLab variable is Protected or
   Masked is not in the file. This is why repo-mutation and GitLab findings are
   scored HIGH rather than CRITICAL.
+- **Protected environments.** A job pinned to a GitHub Environment
+  (`environment: production`) whose protection rules require a reviewer only runs
+  after a maintainer approves it, which gates the agent as effectively as an
+  `author_association` check. The rules live in repository settings, not the
+  workflow, so grackle still flags such a job. If the environment requires
+  reviewers, treat the finding as already mitigated.
 - **Remote reusable workflows.** A `uses: owner/repo/.github/workflows/x.yml@ref`
   is resolved by the platform, not by grackle. Only local (`./`) composite
   actions are followed, one level deep.

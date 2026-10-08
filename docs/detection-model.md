@@ -38,6 +38,12 @@ grants the agent exec/write tools (`Bash`, `Edit`, `Write`), or runs the agent
 in an auto-approve mode (`--dangerously-skip-permissions`, `--yolo`,
 `--permission-mode bypassPermissions`).
 
+`--permission-mode auto` only auto-approves tools that were granted, so a
+`claude-code-action` job that runs under `auto`, grants no shell, and lists the
+exec/write tools in `--disallowedTools` is not write-capable and is not flagged.
+A stronger mode (`bypassPermissions`, `acceptEdits`) or a `Bash` grant still
+fires.
+
 ## How rules are structured
 
 Each rule is pure data: an **anchor** regex that locates an agent invocation, an

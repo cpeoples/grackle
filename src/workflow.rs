@@ -174,9 +174,11 @@ pub fn workflow_run_escalation(content: &str) -> bool {
     // A same-repo restriction on the *producer's* source: the consumer only acts
     // when the triggering run came from the base repo itself, so a fork PR (which
     // runs in the fork's context with a fork head_repository) never reaches it.
+    // The base-repo side may be `github.repository` or the run's own
+    // `workflow_run.repository.full_name`, in either order.
     static SAME_REPO_GUARD: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
-            r"(?i)workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*github\.(?:repository|repository_owner)|workflow_run\.repository\.full_name\s*==\s*github\.repository|head_repository\.fork\s*==\s*(?:false|['\x22]false['\x22])",
+            r"(?i)workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*github\.(?:repository|repository_owner)|workflow_run\.repository\.full_name\s*==\s*github\.repository|workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)|(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.head_repository\.(?:full_name|owner\.login)|head_repository\.fork\s*==\s*(?:false|['\x22]false['\x22])",
         )
         .unwrap()
     });
@@ -970,6 +972,49 @@ pub fn claude_action_self_gated(content: &str, lines: &[&str], line_index: usize
     !workflow_run_escalation(content)
 }
 
+/// A `claude-code(-base)-action` job running under `--permission-mode auto` has
+/// no arbitrary shell when the write/exec tools are withheld: `auto` only
+/// auto-approves tools that were granted, so with no `Bash` in any allow grant
+/// and `--disallowedTools` covering `Bash`/`Edit`/`Write`/`MultiEdit`/
+/// `NotebookEdit`, nothing the agent can run reaches a shell. A stronger mode
+/// (`bypassPermissions`, `acceptEdits`, `--dangerously-skip-permissions`) or a
+/// shell in the allow grant is left to fire.
+pub fn claude_auto_mode_neutralized(lines: &[&str], line_index: usize) -> bool {
+    static CLAUDE_ACTION: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?i)anthropics/claude-code-(?:base-)?action@").unwrap()
+    });
+    static STRONGER_AUTONOMY: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\b|--full-auto\b|--permission-mode[\s=]+['\x22]?(?:bypassPermissions|acceptEdits)\b|--approval-mode[\s=]+['\x22]?(?:yolo|auto_edit)\b|--allow-all-tools\b",
+        )
+        .unwrap()
+    });
+    static AUTO_MODE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?i)--permission-mode[\s=]+['\x22]?auto\b").unwrap());
+    // `(?:^|[^a-z])` keeps `disallowedTools` from matching as an allow grant: the
+    // `s` preceding its `allowed` is a letter, so the prefix fails there.
+    static DANGER_ALLOW_GRANT: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r#"(?i)(?:^|[^a-z])allowed[_-]?[Tt]ools[\s=:]*["'\[]?[^\n]*?\b(?:Bash|Edit|Write|MultiEdit|NotebookEdit)\b"#,
+        )
+        .unwrap()
+    });
+    static DISALLOWS_DANGER: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r#"(?i)disallowed[_-]?[Tt]ools[\s=:]*["'\[]?[^\n]*?\b(?:Bash|Edit|Write|MultiEdit|NotebookEdit)\b"#,
+        )
+        .unwrap()
+    });
+    let job_text = enclosing_job_block(lines, line_index);
+    if !CLAUDE_ACTION.is_match(&job_text) || STRONGER_AUTONOMY.is_match(&job_text) {
+        return false;
+    }
+    if !AUTO_MODE.is_match(&job_text) || DANGER_ALLOW_GRANT.is_match(&job_text) {
+        return false;
+    }
+    DISALLOWS_DANGER.is_match(&job_text)
+}
+
 /// A fail-closed allowlist guard: a step (typically `actions/github-script`)
 /// that aborts the whole job - via `core.setFailed(...)`, `process.exit`, or a
 /// shell `exit 1` - when the triggering actor is not present in a maintainer-
@@ -1525,6 +1570,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+";
+        assert!(!workflow_run_escalation(wf));
+    }
+
+    #[test]
+    fn workflow_run_guarded_against_run_repository_is_not_escalation() {
+        // Same-repo guard compared against workflow_run.repository.full_name
+        // rather than github.repository, as supermemoryai/supermemory writes it.
+        let wf = "\
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+jobs:
+  fix:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.event.workflow_run.repository.full_name
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 ";
         assert!(!workflow_run_escalation(wf));
     }

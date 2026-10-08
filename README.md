@@ -74,7 +74,10 @@ must hold for a finding to fire:
    default it does not narrow.
 
 Review-only agents (`contents: read`, comment scope) and gated agents are not
-flagged.
+flagged. Neither is a `claude-code-action` job under `--permission-mode auto`
+that grants no shell and lists the exec/write tools in `--disallowedTools`,
+since `auto` only auto-approves tools that were granted; a stronger mode or a
+`Bash` grant still fires.
 
 **Secret exfiltration without repository write (HIGH).** A separate rule fires
 one tier lower when conditions 1 and 2 hold but the job is *not* provably
