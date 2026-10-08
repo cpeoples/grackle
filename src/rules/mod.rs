@@ -12,7 +12,7 @@ pub mod metadata;
 pub mod remediation;
 
 use crate::workflow::{
-    claude_action_self_gated, gitlab_agent_reachable_and_writable,
+    claude_action_self_gated, claude_auto_mode_neutralized, gitlab_agent_reachable_and_writable,
     gitlab_job_gated_on_internal_var, gitlab_job_is_manual_gated, has_fork_reachable_trigger,
     has_ghaw_membership_gate, has_indirect_author_association_gate,
     has_secret_bearing_fork_trigger, has_transitive_label_gate, has_transitive_permission_gate,
@@ -583,7 +583,9 @@ impl RuleSpec {
                         let writes = job_can_write(&ctx.lines, idx, ctx.workflow_write);
                         match self.family {
                             Family::ForkShellExec { .. } => {
-                                !writes && job_exposes_secret(&ctx.lines, idx)
+                                !writes
+                                    && job_exposes_secret(&ctx.lines, idx)
+                                    && !claude_auto_mode_neutralized(&ctx.lines, idx)
                             }
                             _ => writes,
                         }
