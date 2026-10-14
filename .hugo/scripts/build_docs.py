@@ -386,6 +386,97 @@ def build_landing(rules: list[dict]) -> None:
     write(CONTENT_DIR / "_index.md", front + hero + body)
 
 
+SITE_URL = "https://cpeoples.github.io/grackle/"
+
+
+def write_llms_txt() -> None:
+    """Emit static/llms.txt: a plaintext site index for LLMs (llmstxt.org).
+
+    Mirrors the sibling sites: an H1 title, a one-line summary blockquote, a
+    short prose paragraph, then grouped sections of absolute links. Written to
+    static/ so Hugo copies it verbatim to the site root, next to robots.txt
+    (which points crawlers here via Allow: /). Absolute URLs use the deploy
+    baseURL so links resolve on the project Pages subpath, falling back to the
+    production URL for a local build.
+    """
+    deploy_base = BASE_URL.rstrip("/")
+    base = deploy_base if deploy_base else SITE_URL.rstrip("/")
+    lines = [
+        "# grackle",
+        "",
+        "> Static scanner that detects fork-triggerable CI coding agents with "
+        "repository write access in GitHub Actions and GitLab CI workflows. When "
+        "an AI coding agent runs on untrusted fork input in a job that can write "
+        "to the repo and nothing checks who triggered it, prompt injection "
+        "becomes remote code execution and repository takeover under the CI "
+        "token. grackle finds that exact composition statically, before it "
+        "merges. Apache-2.0 licensed and free for commercial use.",
+        "",
+        "grackle is a single Rust binary. It parses GitHub Actions and GitLab CI "
+        "workflows, proves fork reachability, author and merge gates, and "
+        "repository write capability, then reports only the compositions that "
+        "are actually exploitable. Findings carry a severity, a confidence, "
+        "control-framework references, the offending workflow block, and a "
+        "dynamic secure-fix write-up. It outputs SARIF, GitLab SAST, CycloneDX "
+        "SBOM, JUnit, JSON, HTML, Markdown, YAML, CSV, and XML. Releases ship "
+        "with SLSA Build Level 3 provenance and CycloneDX SBOMs, and release "
+        "artifacts are Sigstore-signed.",
+        "",
+        "## Install",
+        "",
+        f"- [Installation]({base}/#install): download a prebuilt binary from "
+        "releases, or build from source with the Rust toolchain",
+        "- [Prebuilt binaries](https://github.com/cpeoples/grackle/releases): "
+        "macOS, Linux, and Windows archives attached to each release",
+        "- [Snap Store](https://snapcraft.io/grackle): snap install grackle",
+        "- [Build from source](https://github.com/cpeoples/grackle): cargo "
+        "install --git https://github.com/cpeoples/grackle.git",
+        "- [Source code](https://github.com/cpeoples/grackle): GitHub repository "
+        "(Apache-2.0)",
+        f"- [Documentation]({base}/): full docs site",
+        "",
+        "## Quick start",
+        "",
+        f"- [CLI reference]({base}/cli/): flags, formats, and self-test",
+        f"- [Detection model]({base}/detection-model/): how fork reachability, "
+        "gates, and write capability are proven",
+        f"- [CI/CD integration]({base}/ci-cd/): GitHub Actions and GitLab CI, "
+        "plus pull request and merge request comments",
+        f"- [Output formats]({base}/output-formats/): every format, confidence "
+        "banding, and dynamic remediation",
+        f"- [Remediations]({base}/remediations/): how the corrected workflow is "
+        "generated",
+        f"- [Limitations]({base}/limitations/): what this layer of defense does "
+        "and does not cover",
+        "",
+        "## Distribution and supply-chain",
+        "",
+        "- License: Apache-2.0",
+        "- Language: Rust (edition 2021)",
+        "- Provenance: [SLSA Build Level 3]"
+        "(https://slsa.dev/spec/v1.0/levels#build-l3)",
+        "- SBOM: CycloneDX, attached to every GitHub release",
+        "- Signing: Sigstore-verified release artifacts",
+        "",
+        "## Output formats",
+        "",
+        "- SARIF 2.1.0 (GitHub code scanning)",
+        "- GitLab SAST JSON (GitLab Security Dashboard)",
+        "- CycloneDX 1.5 SBOM",
+        "- JUnit XML",
+        "- JSON, HTML, Markdown, YAML, CSV, XML",
+        "",
+        "## Project links",
+        "",
+        "- [Issues](https://github.com/cpeoples/grackle/issues)",
+        "- [Releases and changelog]"
+        "(https://github.com/cpeoples/grackle/releases)",
+        "- [Author](https://github.com/cpeoples)",
+    ]
+    write(STATIC_DIR / "llms.txt", "\n".join(lines) + "\n")
+    print("Generated static/llms.txt")
+
+
 def main() -> None:
     CONTENT_DIR.mkdir(parents=True, exist_ok=True)
     rules = load_rules()
@@ -394,6 +485,7 @@ def main() -> None:
     build_landing(rules)
     build_rule_pages(rules)
     build_prose_pages()
+    write_llms_txt()
     print("Docs generation complete.")
 
 
