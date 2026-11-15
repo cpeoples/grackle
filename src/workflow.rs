@@ -1919,8 +1919,9 @@ jobs:
     fn author_gate_positive_label_gate_matches() {
         // Running only when a maintainer-applied label is present is a gate: a
         // fork contributor cannot set labels.
-        assert!(AUTHOR_GATE
-            .is_match("    if: contains(github.event.issue.labels.*.name, 'agent')\n"));
+        assert!(
+            AUTHOR_GATE.is_match("    if: contains(github.event.issue.labels.*.name, 'agent')\n")
+        );
         assert!(AUTHOR_GATE.is_match("    if: contains(github.event.label.name, 'agent')\n"));
     }
 
@@ -1929,11 +1930,10 @@ jobs:
         // `!contains(labels, 'safe')` runs when the label is absent, which is the
         // default for any fork issue or PR, so it is not a gate. The positive
         // form stays a gate; only the leading `!` must defeat the match.
-        assert!(!AUTHOR_GATE
-            .is_match("    if: !contains(github.event.issue.labels.*.name, 'safe')\n"));
         assert!(
-            !AUTHOR_GATE.is_match("    if: !contains(github.event.label.name, 'safe')\n")
+            !AUTHOR_GATE.is_match("    if: !contains(github.event.issue.labels.*.name, 'safe')\n")
         );
+        assert!(!AUTHOR_GATE.is_match("    if: !contains(github.event.label.name, 'safe')\n"));
     }
 
     #[test]
