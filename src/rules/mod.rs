@@ -514,6 +514,17 @@ impl RuleSpec {
                 if !ctx.reachable || (ctx.gated && !ctx.review_bypass) {
                     return Vec::new();
                 }
+                // Repo write and the provider key both come from base-context
+                // credentials a fork `pull_request` run never gets (read-only
+                // token, no secrets), so the agent can neither push nor read its
+                // key. The write premise needs a secret-bearing or workflow_run
+                // trigger, or a workflow_call callee gated by its caller.
+                if !has_secret_bearing_fork_trigger(content)
+                    && !workflow_run_escalation(content)
+                    && !is_workflow_call_only(content)
+                {
+                    return Vec::new();
+                }
                 if !proof.is_match(content) {
                     return Vec::new();
                 }
@@ -830,6 +841,40 @@ mod tests {
             .filter(|f| f.rule_id == "fork_triggerable_opencode_agent_with_repo_write")
             .count();
         assert_eq!(opencode, 2, "two separate jobs = two findings");
+    }
+
+    /// A CLI agent whose only fork-reachable trigger is a plain `pull_request`
+    /// is not exploitable: a fork `pull_request` run gets a read-only token and
+    /// no secrets, so the agent cannot push or read its key. The same agent on
+    /// `issue_comment` (secrets, writable token) must still fire.
+    #[test]
+    fn repo_write_agent_on_pull_request_only_is_not_reachable() {
+        let pr_only = concat!(
+            "on:\n  pull_request:\n    types: [opened, synchronize]\n",
+            "permissions:\n  contents: write\n",
+            "jobs:\n  goose:\n    runs-on: ubuntu-latest\n    steps:\n",
+            "      - env:\n          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}\n",
+            "        run: |\n          goose run --instructions /tmp/task.md\n          git push origin HEAD\n",
+        );
+        assert!(
+            !Engine::new()
+                .scan(pr_only)
+                .iter()
+                .any(|f| f.rule_id == "fork_triggerable_goose_agent_with_repo_write"),
+            "pull_request-only is read-only for forks; repo-write rule must not fire"
+        );
+
+        let comment = pr_only.replace(
+            "on:\n  pull_request:\n    types: [opened, synchronize]\n",
+            "on:\n  issue_comment:\n    types: [created]\n",
+        );
+        assert!(
+            Engine::new()
+                .scan(&comment)
+                .iter()
+                .any(|f| f.rule_id == "fork_triggerable_goose_agent_with_repo_write"),
+            "issue_comment carries secrets and a writable token; must still fire"
+        );
     }
 
     /// A `claude ... --dangerously-skip-permissions` invocation split across
