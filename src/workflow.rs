@@ -175,10 +175,12 @@ pub fn workflow_run_escalation(content: &str) -> bool {
     // when the triggering run came from the base repo itself, so a fork PR (which
     // runs in the fork's context with a fork head_repository) never reaches it.
     // The base-repo side may be `github.repository` or the run's own
-    // `workflow_run.repository.full_name`, in either order.
+    // `workflow_run.repository.full_name`, in either order. The bare negation
+    // `!github.event.workflow_run.head_repository.fork` is the same guard: it
+    // admits only non-fork producers.
     static SAME_REPO_GUARD: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
-            r"(?i)workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*github\.(?:repository|repository_owner)|workflow_run\.repository\.full_name\s*==\s*github\.repository|workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)|(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.head_repository\.(?:full_name|owner\.login)|head_repository\.fork\s*==\s*(?:false|['\x22]false['\x22])",
+            r"(?i)workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*github\.(?:repository|repository_owner)|workflow_run\.repository\.full_name\s*==\s*github\.repository|workflow_run\.head_repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)|(?:github\.event\.)?workflow_run\.repository\.(?:full_name|owner\.login)\s*==\s*(?:github\.event\.)?workflow_run\.head_repository\.(?:full_name|owner\.login)|head_repository\.fork\s*==\s*(?:false|['\x22]false['\x22])|![\s(]*(?:github\.event\.)?workflow_run\.head_repository\.fork\b",
         )
         .unwrap()
     });
@@ -578,7 +580,7 @@ pub static JOB_WRITE: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// workflows, which would silently misread a gated workflow as ungated).
 pub static AUTHOR_GATE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)getCollaboratorPermissionLevel|author_association\s*(?:==|!=|\bin\b|\bnot in\b)|author_association\b[^\n)]{0,120}?\)\s*(?:==|!=)\s*['"]?(?:OWNER|MEMBER|COLLABORATOR)|contains\(\s*fromJSON\('\[\s*"(?:OWNER|MEMBER|COLLABORATOR)|\[\s*['"]OWNER['"]\s*,\s*['"](?:MEMBER|COLLABORATOR)['"]|contains\(\s*['"][^'"\n]*(?:OWNER|MEMBER|COLLABORATOR)[^'"\n]*['"]\s*,\s*[^)\n]*?author_association|contains\(\s*fromJSON\([^)]*\)\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|contains\(\s*(?:vars|secrets|env)\.[A-Za-z0-9_]+\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|allow_forks\s*:\s*["']?false|permission\.permission|collaborators/[^/\s]+/permission|["']?(?:admin|maintain|write)["']?\s*[!=]=\s*["']?\$?(?:PERMISSION|permission)|\$?(?:PERMISSION|permission)["']?\s*[!=]=\s*["'](?:admin|maintain|write)|(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login|review\.user\.login)\s*==\s*['"]|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.(?:event\.)?repository\.owner\.login|==\s*github\.(?:event\.)?repository\.owner\.login|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.repository_owner\b|==\s*github\.repository_owner\b|github\.repository_owner\s*==\s*['"]|contains\(\s*github\.event\.[a-z_.]*labels\.\*\.name|contains\(\s*github\.event\.label\.name|github\.event\.label\.name\s*==|github\.event\.action\s*==\s*['"]labeled|head\.repo\.full_name\s*(?:==|!==|!=)\s*|head\.repo\.fork\b|is_fork\s*(?:==|!=)"#,
+        r#"(?i)getCollaboratorPermissionLevel|author_association\s*(?:==|!=|\bin\b|\bnot in\b)|author_association\b[^\n)]{0,120}?\)\s*(?:==|!=)\s*['"]?(?:OWNER|MEMBER|COLLABORATOR)|contains\(\s*fromJSON\('\[\s*"(?:OWNER|MEMBER|COLLABORATOR)|\[\s*['"]OWNER['"]\s*,\s*['"](?:MEMBER|COLLABORATOR)['"]|contains\(\s*['"][^'"\n]*(?:OWNER|MEMBER|COLLABORATOR)[^'"\n]*['"]\s*,\s*[^)\n]*?author_association|contains\(\s*fromJSON\([^)]*\)\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|contains\(\s*(?:vars|secrets|env)\.[A-Za-z0-9_]+\s*,\s*[^)\n]*?(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login)|allow_forks\s*:\s*["']?false|permission\.permission|collaborators/[^/\s]+/permission|["']?(?:admin|maintain|write)["']?\s*[!=]=\s*["']?\$?(?:PERMISSION|permission)|\$?(?:PERMISSION|permission)["']?\s*[!=]=\s*["'](?:admin|maintain|write)|(?:comment\.user\.login|sender\.login|github\.actor|triggering_actor|pull_request\.user\.login|issue\.user\.login|review\.user\.login)\s*==\s*['"]|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.(?:event\.)?repository\.owner\.login|==\s*github\.(?:event\.)?repository\.owner\.login|(?:github\.actor|triggering_actor|sender\.login|comment\.user\.login)\s*==\s*github\.repository_owner\b|==\s*github\.repository_owner\b|github\.repository_owner\s*==\s*['"]|(?:^|[^!])contains\(\s*github\.event\.[a-z_.]*labels\.\*\.name|(?:^|[^!])contains\(\s*github\.event\.label\.name|github\.event\.label\.name\s*==|github\.event\.action\s*==\s*['"]labeled|head\.repo\.full_name\s*(?:==|!==|!=)\s*|head\.repo\.fork\b|is_fork\s*(?:==|!=)"#,
     )
     .unwrap()
 });
@@ -1575,6 +1577,32 @@ jobs:
     }
 
     #[test]
+    fn workflow_run_guarded_by_negated_fork_flag_is_not_escalation() {
+        // The bare negation `!...head_repository.fork` admits only non-fork
+        // producers, exactly like `head_repository.fork == false`. A fork PR's
+        // producer run reports a fork head_repository, so it never reaches the
+        // consumer. This is the idiom deslicer/ai-sidekick-for-splunk used to
+        // remediate its auto-fix-ci workflow.
+        let wf = "\
+on:
+  workflow_run:
+    workflows: [CI, Code Quality]
+    types: [completed]
+jobs:
+  attempt-fix:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      !github.event.workflow_run.head_repository.fork
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+";
+        assert!(!workflow_run_escalation(wf));
+    }
+
+    #[test]
     fn workflow_run_guarded_against_run_repository_is_not_escalation() {
         // Same-repo guard compared against workflow_run.repository.full_name
         // rather than github.repository, as supermemoryai/supermemory writes it.
@@ -1884,6 +1912,27 @@ jobs:
         // bot identity.
         assert!(
             AUTHOR_GATE.is_match("    if: github.event.review.user.login == 'coderabbitai[bot]'\n")
+        );
+    }
+
+    #[test]
+    fn author_gate_positive_label_gate_matches() {
+        // Running only when a maintainer-applied label is present is a gate: a
+        // fork contributor cannot set labels.
+        assert!(AUTHOR_GATE
+            .is_match("    if: contains(github.event.issue.labels.*.name, 'agent')\n"));
+        assert!(AUTHOR_GATE.is_match("    if: contains(github.event.label.name, 'agent')\n"));
+    }
+
+    #[test]
+    fn author_gate_negated_label_gate_does_not_match() {
+        // `!contains(labels, 'safe')` runs when the label is absent, which is the
+        // default for any fork issue or PR, so it is not a gate. The positive
+        // form stays a gate; only the leading `!` must defeat the match.
+        assert!(!AUTHOR_GATE
+            .is_match("    if: !contains(github.event.issue.labels.*.name, 'safe')\n"));
+        assert!(
+            !AUTHOR_GATE.is_match("    if: !contains(github.event.label.name, 'safe')\n")
         );
     }
 
