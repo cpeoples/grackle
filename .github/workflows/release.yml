@@ -49,15 +49,15 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-latest
           - target: x86_64-apple-darwin
-            runner: macos-14
+            runner: macos-latest
           - target: x86_64-pc-windows-msvc
-            runner: windows-2022
+            runner: windows-latest
 
     steps:
       - name: Harden Runner
@@ -84,7 +84,7 @@ jobs:
           [ "${{ runner.os }}" = "Windows" ] && bin="${bin}.exe"
           # A cross-compiled binary whose arch differs from the runner host cannot
           # execute here: aarch64 Linux on the amd64 runner, and x86_64 macOS on the
-          # arm64 macos-14 runner. Skip the run in those cases; build success is the
+          # arm64 macos-latest runner. Skip the run in those cases; build success is the
           # gate, and the matching native target still exercises --self-test.
           case "${{ matrix.target }}" in
             aarch64-unknown-linux-gnu) host_arch=x86_64 ;;
